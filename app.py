@@ -1,7 +1,8 @@
 from flask import Flask, request, jsonify
 from flask_sqlalchemy import SQLAlchemy
-from flask_marshmallow import Marshmallow
+from flask_marshmallow import Marshmallow, base_fields
 from flask_cors import CORS
+from flask_bcrypt import Bcrypt
 from dotenv import load_dotenv
 import os
 
@@ -12,6 +13,7 @@ app.config["SQLALCHEMY_DATABASE_URI"] = "postgresql://" + os.environ.get("DATABA
 
 db = SQLAlchemy(app)
 ma = Marshmallow(app)
+bcrypt = Bcrypt(app)
 CORS(app)
 
 # SQLAlchemy Tables
@@ -113,7 +115,133 @@ user_schema = UserSchema()
 multiple_user_schema = UserSchema(many=True)
 
 # Flask Endpoints
+@app.route("/user/add", methods=["POST"])
+def add_user():
+    if request.content_type != "application/json":
+        return jsonify({
+            "status": 400,
+            "message": "Error: Data must be sent as JSON.",
+            "data": {}
+        })
 
+    data = request.get_json()
+    username = data.get("username")
+    password = data.get("password")
+    email = data.get("email")
+
+    username_taken_check = db.session.query(User).filter(User.username == username).first()
+    if username_taken_check is not None:
+        return jsonify({
+            "status": 400,
+            "message": "Username already taken.",
+            "data": {}
+        })
+
+    hashed_password = bcrypt.generate_password_hash(password).decode("utf-8")
+
+    record = User(username, hashed_password, email)
+    db.session.add(record)
+    db.session.commit()
+
+    return jsonify({
+        "status": 200,
+        "message": "User Added",
+        "data": user_schema.dump(record)
+    })
+
+@app.route("/user/get", methods=["GET"])
+def get_all_users():
+    records = db.session.query(User).all()
+    return jsonify(multiple_user_schema.dump(records))
+
+@app.route("/user/get/<id>", methods=["GET"])
+def get_user_by_id(id):
+    record = db.session.query(User).filter(User.id == id).first()
+    return jsonify(user_schema.dump(record))
+
+@app.route("/user/update/<id>", methods=["PUT"])
+def update_user(id):
+    if request.content_type != "application/json":
+        return jsonify({
+            "status": 400,
+            "message": "Error: Data must be sent as JSON.",
+            "data": {}
+        })
+
+    data = request.get_json()
+    username = data.get("username")
+    password = data.get("password")
+    email = data.get("email")
+
+    record = db.session.query(User).filter(User.id == id).first()
+    if username is not None:
+        username_taken_check = db.session.query(User).filter(User.username == username).first()
+        if username_taken_check is not None:
+            return jsonify({
+                "status": 400,
+                "message": "Username already taken.",
+                "data": {}
+            })
+        record.username = username
+    if password is not None:
+        hashed_password = bcrypt.generate_password_hash(password).decode("utf-8")
+        record.password = hashed_password
+    if email is not None:
+        record.email = email
+
+    db.session.commit()
+
+    return jsonify({
+        "status": 200,
+        "message": "User Updated",
+        "data": user_schema.dump(record)
+    })
+
+@app.route("/user/delete/<id>", methods=["DELETE"])
+def delete_user(id):
+    record = db.session.query(User).filter(User.id == id).first()
+    db.session.delete(record)
+    db.session.commit()
+    return jsonify({
+        "status": 200,
+        "message": "User Deleted",
+        "data": user_schema.dump(record)
+    })
+
+@app.route("/user/login", methods=["POST"])
+def login_user():
+    if request.content_type != "application/json":
+        return jsonify({
+            "status": 400,
+            "message": "Error: Data must be sent as JSON.",
+            "data": {}
+        })
+
+    data = request.get_json()
+    username = data.get("username")
+    password = data.get("password")
+
+    record = db.session.query(User).filter(User.username == username).first()
+    if record is None:
+        return jsonify({
+            "status": 400,
+            "message": "Invalid username or password",
+            "data": {}
+        })
+
+    password_check = bcrypt.check_password_hash(record.password, password)
+    if password_check is False:
+        return jsonify({
+            "status": 400,
+            "message": "Invalid username or password",
+            "data": {}
+        })
+
+    return jsonify({
+        "status": 200,
+        "message": "Valid username and password",
+        "data": user_schema.dump(record)
+    })
 
 if __name__ == "__main__":
     app.run(debug=True)
