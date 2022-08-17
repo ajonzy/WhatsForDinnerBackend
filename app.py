@@ -91,7 +91,7 @@ multiple_step_schema = StepSchema(many=True)
 
 class RecipeSchema(ma.Schema):
     class Meta:
-        fields = ("id", "steps", "ingredients")
+        fields = ("id", "meal_id", "steps", "ingredients")
     steps = ma.Nested(multiple_step_schema)
     ingredients = ma.Nested(multiple_ingredient_schema)
 
@@ -318,6 +318,58 @@ def delete_meal(id):
         "status": 200,
         "message": "Meal Deleted",
         "data": meal_schema.dump(record)
+    })
+
+
+@app.route("/recipe/add", methods=["POST"])
+def add_recipe():
+    if request.content_type != "application/json":
+        return jsonify({
+            "status": 400,
+            "message": "Error: Data must be sent as JSON.",
+            "data": {}
+        })
+
+    data = request.get_json()
+    meal_id = data.get("meal_id")
+
+    recipe_check = db.session.query(Recipe).filter(Recipe.meal_id == meal_id).first()
+    if recipe_check is not None:
+        return jsonify({
+            "status": 400,
+            "message": "Error: Recipe already exists.",
+            "data": {}
+        })
+
+    record = Recipe(meal_id)
+    db.session.add(record)
+    db.session.commit()
+
+    return jsonify({
+        "status": 200,
+        "message": "Recipe Added",
+        "data": recipe_schema.dump(record)
+    })
+
+@app.route("/recipe/get", methods=["GET"])
+def get_all_recipes():
+    records = db.session.query(Recipe).all()
+    return jsonify(multiple_recipe_schema.dump(records))
+
+@app.route("/recipe/get/<id>", methods=["GET"])
+def get_recipe_by_id(id):
+    record = db.session.query(Recipe).filter(Recipe.id == id).first()
+    return jsonify(meal_schema.dump(record))
+
+@app.route("/recipe/delete/<id>", methods=["DELETE"])
+def delete_recipe(id):
+    record = db.session.query(Recipe).filter(Recipe.id == id).first()
+    db.session.delete(record)
+    db.session.commit()
+    return jsonify({
+        "status": 200,
+        "message": "Recipe Deleted",
+        "data": recipe_schema.dump(record)
     })
 
 if __name__ == "__main__":
