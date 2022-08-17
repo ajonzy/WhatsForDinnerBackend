@@ -101,7 +101,7 @@ multiple_recipe_schema = RecipeSchema(many=True)
 class MealSchema(ma.Schema):
     class Meta:
         fields = ("id", "name", "description", "image_url", "user_id", "recipe")
-    recipe = base_fields.Function(lambda fields: recipe_schema.dump(fields.recipe[0]))
+    recipe = base_fields.Function(lambda fields: recipe_schema.dump(fields.recipe[0] if len(fields.recipe) > 0 else None))
 
 meal_schema = MealSchema()
 multiple_meal_schema = MealSchema(many=True)
@@ -241,6 +241,83 @@ def login_user():
         "status": 200,
         "message": "Valid username and password",
         "data": user_schema.dump(record)
+    })
+
+
+@app.route("/meal/add", methods=["POST"])
+def add_meal():
+    if request.content_type != "application/json":
+        return jsonify({
+            "status": 400,
+            "message": "Error: Data must be sent as JSON.",
+            "data": {}
+        })
+
+    data = request.get_json()
+    name = data.get("name")
+    description = data.get("description")
+    image_url = data.get("image_url")
+    user_id = data.get("user_id")
+
+    record = Meal(name, description, image_url, user_id)
+    db.session.add(record)
+    db.session.commit()
+
+    return jsonify({
+        "status": 200,
+        "message": "Meal Added",
+        "data": meal_schema.dump(record)
+    })
+
+@app.route("/meal/get", methods=["GET"])
+def get_all_meals():
+    records = db.session.query(Meal).all()
+    return jsonify(multiple_meal_schema.dump(records))
+
+@app.route("/meal/get/<id>", methods=["GET"])
+def get_meal_by_id(id):
+    record = db.session.query(Meal).filter(Meal.id == id).first()
+    return jsonify(meal_schema.dump(record))
+
+@app.route("/meal/update/<id>", methods=["PUT"])
+def update_meal(id):
+    if request.content_type != "application/json":
+        return jsonify({
+            "status": 400,
+            "message": "Error: Data must be sent as JSON.",
+            "data": {}
+        })
+
+    data = request.get_json()
+    name = data.get("name")
+    description = data.get("description")
+    image_url = data.get("image_url")
+
+    record = db.session.query(Meal).filter(Meal.id == id).first()
+    if name is not None:
+        record.name = name
+    if description is not None:
+        record.description = description
+    if image_url is not None:
+        record.image_url = image_url
+
+    db.session.commit()
+
+    return jsonify({
+        "status": 200,
+        "message": "Meal Updated",
+        "data": meal_schema.dump(record)
+    })
+
+@app.route("/meal/delete/<id>", methods=["DELETE"])
+def delete_meal(id):
+    record = db.session.query(Meal).filter(Meal.id == id).first()
+    db.session.delete(record)
+    db.session.commit()
+    return jsonify({
+        "status": 200,
+        "message": "Meal Deleted",
+        "data": meal_schema.dump(record)
     })
 
 if __name__ == "__main__":
