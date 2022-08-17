@@ -473,5 +473,106 @@ def delete_step(id):
         "data": step_schema.dump(record)
     })
 
+
+@app.route("/ingredient/add", methods=["POST"])
+def add_ingredient():
+    if request.content_type != "application/json":
+        return jsonify({
+            "status": 400,
+            "message": "Error: Data must be sent as JSON.",
+            "data": {}
+        })
+
+    data = request.get_json()
+    name = data.get("name")
+    amount = data.get("amount")
+    recipe_id = data.get("recipe_id")
+
+    record = Ingredient(name, amount, recipe_id)
+    db.session.add(record)
+    db.session.commit()
+
+    return jsonify({
+        "status": 200,
+        "message": "Ingredient Added",
+        "data": ingredient_schema.dump(record)
+    })
+
+@app.route("/ingredient/add/multiple", methods=["POST"])
+def add_multiple_ingredients():
+    if request.content_type != "application/json":
+        return jsonify({
+            "status": 400,
+            "message": "Error: Data must be sent as JSON.",
+            "data": {}
+        })
+
+    data = request.get_json()
+    records = []
+    for data in data:
+        name = data.get("name")
+        amount = data.get("amount")
+        recipe_id = data.get("recipe_id")
+
+        record = Ingredient(name, amount, recipe_id)
+        db.session.add(record)
+        db.session.commit()
+
+        records.append(record)
+
+    return jsonify({
+        "status": 200,
+        "message": "Ingredients Added",
+        "data": multiple_ingredient_schema.dump(records)
+    })
+
+@app.route("/ingredient/get", methods=["GET"])
+def get_all_ingredients():
+    records = db.session.query(Ingredient).all()
+    return jsonify(multiple_ingredient_schema.dump(records))
+
+@app.route("/ingredient/get/<id>", methods=["GET"])
+def get_ingredient_by_id(id):
+    record = db.session.query(Ingredient).filter(Ingredient.id == id).first()
+    return jsonify(ingredient_schema.dump(record))
+
+@app.route("/ingredient/update/<id>", methods=["PUT"])
+def update_ingredient(id):
+    if request.content_type != "application/json":
+        return jsonify({
+            "status": 400,
+            "message": "Error: Data must be sent as JSON.",
+            "data": {}
+        })
+
+    data = request.get_json()
+    name = data.get("name")
+    amount = data.get("amount")
+
+    record = db.session.query(Ingredient).filter(Ingredient.id == id).first()
+    if name is not None:
+        record.name = name
+    if amount is not None:
+        record.amount = amount
+
+    db.session.commit()
+
+    return jsonify({
+        "status": 200,
+        "message": "Ingredient Updated",
+        "data": ingredient_schema.dump(record)
+    })
+
+@app.route("/ingredient/delete/<id>", methods=["DELETE"])
+def delete_ingredient(id):
+    record = db.session.query(Ingredient).filter(Ingredient.id == id).first()
+    db.session.delete(record)
+    db.session.commit()
+    return jsonify({
+        "status": 200,
+        "message": "Ingredient Deleted",
+        "data": ingredient_schema.dump(record)
+    })
+
 if __name__ == "__main__":
     app.run(debug=True)
