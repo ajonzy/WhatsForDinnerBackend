@@ -73,7 +73,44 @@ class Ingredient(db.Model):
         self.recipe_id = recipe_id
 
 # Marshmallow Schemas
+class IngredientSchema(ma.Schema):
+    class Meta:
+        fields = ("id", "name", "amount", "recipe_id")
 
+ingredient_schema = IngredientSchema()
+multiple_ingredient_schema = IngredientSchema(many=True)
+
+class StepSchema(ma.Schema):
+    class Meta:
+        fields = ("id", "number", "text", "recipe_id")
+
+step_schema = StepSchema()
+multiple_step_schema = StepSchema(many=True)
+
+class RecipeSchema(ma.Schema):
+    class Meta:
+        fields = ("id", "steps", "ingredients")
+    steps = ma.Nested(multiple_step_schema)
+    ingredients = ma.Nested(multiple_ingredient_schema)
+
+recipe_schema = RecipeSchema()
+multiple_recipe_schema = RecipeSchema(many=True)
+
+class MealSchema(ma.Schema):
+    class Meta:
+        fields = ("id", "name", "description", "image_url", "user_id", "recipe")
+    recipe = base_fields.Function(lambda fields: recipe_schema.dump(fields.recipe[0]))
+
+meal_schema = MealSchema()
+multiple_meal_schema = MealSchema(many=True)
+
+class UserSchema(ma.Schema):
+    class Meta:
+        fields = ("id", "username", "password", "email", "meals") # TODO Remove sensitive data
+    meals = ma.Nested(multiple_meal_schema)
+
+user_schema = UserSchema()
+multiple_user_schema = UserSchema(many=True)
 
 # Flask Endpoints
 
