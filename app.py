@@ -372,5 +372,106 @@ def delete_recipe(id):
         "data": recipe_schema.dump(record)
     })
 
+
+@app.route("/step/add", methods=["POST"])
+def add_step():
+    if request.content_type != "application/json":
+        return jsonify({
+            "status": 400,
+            "message": "Error: Data must be sent as JSON.",
+            "data": {}
+        })
+
+    data = request.get_json()
+    number = data.get("number")
+    text = data.get("text")
+    recipe_id = data.get("recipe_id")
+
+    record = Step(number, text, recipe_id)
+    db.session.add(record)
+    db.session.commit()
+
+    return jsonify({
+        "status": 200,
+        "message": "Step Added",
+        "data": step_schema.dump(record)
+    })
+
+@app.route("/step/add/multiple", methods=["POST"])
+def add_multiple_steps():
+    if request.content_type != "application/json":
+        return jsonify({
+            "status": 400,
+            "message": "Error: Data must be sent as JSON.",
+            "data": {}
+        })
+
+    data = request.get_json()
+    records = []
+    for data in data:
+        number = data.get("number")
+        text = data.get("text")
+        recipe_id = data.get("recipe_id")
+
+        record = Step(number, text, recipe_id)
+        db.session.add(record)
+        db.session.commit()
+
+        records.append(record)
+
+    return jsonify({
+        "status": 200,
+        "message": "Steps Added",
+        "data": multiple_step_schema.dump(records)
+    })
+
+@app.route("/step/get", methods=["GET"])
+def get_all_steps():
+    records = db.session.query(Step).all()
+    return jsonify(multiple_step_schema.dump(records))
+
+@app.route("/step/get/<id>", methods=["GET"])
+def get_step_by_id(id):
+    record = db.session.query(Step).filter(Step.id == id).first()
+    return jsonify(step_schema.dump(record))
+
+@app.route("/step/update/<id>", methods=["PUT"])
+def update_step(id):
+    if request.content_type != "application/json":
+        return jsonify({
+            "status": 400,
+            "message": "Error: Data must be sent as JSON.",
+            "data": {}
+        })
+
+    data = request.get_json()
+    number = data.get("number")
+    text = data.get("text")
+
+    record = db.session.query(Step).filter(Step.id == id).first()
+    if number is not None:
+        record.number = number
+    if text is not None:
+        record.text = text
+
+    db.session.commit()
+
+    return jsonify({
+        "status": 200,
+        "message": "Step Updated",
+        "data": step_schema.dump(record)
+    })
+
+@app.route("/step/delete/<id>", methods=["DELETE"])
+def delete_step(id):
+    record = db.session.query(Step).filter(Step.id == id).first()
+    db.session.delete(record)
+    db.session.commit()
+    return jsonify({
+        "status": 200,
+        "message": "Step Deleted",
+        "data": step_schema.dump(record)
+    })
+
 if __name__ == "__main__":
     app.run(debug=True)
