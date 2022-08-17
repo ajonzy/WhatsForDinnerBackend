@@ -108,7 +108,7 @@ multiple_meal_schema = MealSchema(many=True)
 
 class UserSchema(ma.Schema):
     class Meta:
-        fields = ("id", "username", "password", "email", "meals") # TODO Remove sensitive data
+        fields = ("id", "username", "email", "meals")
     meals = ma.Nested(multiple_meal_schema)
 
 user_schema = UserSchema()
