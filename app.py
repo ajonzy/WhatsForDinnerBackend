@@ -118,7 +118,7 @@ class Shoppingingredient(db.Model):
     obtained = db.Column(db.Boolean, nullable=False, unique=False)
     shoppinglist_id = db.Column(db.Integer, db.ForeignKey("shoppinglist.id"), nullable=False)
     
-    def __init__(self, name, amount, obtained, shoppinglist_id):
+    def __init__(self, name, amount, shoppinglist_id):
         self.name = name
         self.amount = amount
         self.obtained = False
@@ -829,6 +829,110 @@ def delete_shoppinglist(id):
         "status": 200,
         "message": "Shoppinglist Deleted",
         "data": shoppinglist_schema.dump(record)
+    })
+
+
+@app.route("/shoppingingredient/add", methods=["POST"])
+def add_shoppingingredient():
+    if request.content_type != "application/json":
+        return jsonify({
+            "status": 400,
+            "message": "Error: Data must be sent as JSON.",
+            "data": {}
+        })
+
+    data = request.get_json()
+    name = data.get("name")
+    amount = data.get("amount")
+    shoppinglist_id = data.get("shoppinglist_id")
+
+    record = Shoppingingredient(name, amount, shoppinglist_id)
+    db.session.add(record)
+    db.session.commit()
+
+    return jsonify({
+        "status": 200,
+        "message": "Shoppingingredient Added",
+        "data": shoppingingredient_schema.dump(record)
+    })
+
+@app.route("/shoppingingredient/add/multiple", methods=["POST"])
+def add_multiple_shoppingingredients():
+    if request.content_type != "application/json":
+        return jsonify({
+            "status": 400,
+            "message": "Error: Data must be sent as JSON.",
+            "data": {}
+        })
+
+    data = request.get_json()
+    records = []
+    for data in data:
+        name = data.get("name")
+        amount = data.get("amount")
+        shoppinglist_id = data.get("shoppinglist_id")
+
+        record = Shoppingingredient(name, amount, shoppinglist_id)
+        db.session.add(record)
+        db.session.commit()
+
+        records.append(record)
+
+    return jsonify({
+        "status": 200,
+        "message": "Shoppingingredients Added",
+        "data": multiple_shoppingingredient_schema.dump(records)
+    })
+
+@app.route("/shoppingingredient/get", methods=["GET"])
+def get_all_shoppingingredients():
+    records = db.session.query(Shoppingingredient).all()
+    return jsonify(multiple_shoppingingredient_schema.dump(records))
+
+@app.route("/shoppingingredient/get/<id>", methods=["GET"])
+def get_shoppingingredient_by_id(id):
+    record = db.session.query(Shoppingingredient).filter(Shoppingingredient.id == id).first()
+    return jsonify(ingredient_schema.dump(record))
+
+@app.route("/shoppingingredient/update/<id>", methods=["PUT"])
+def update_shoppingingredient(id):
+    if request.content_type != "application/json":
+        return jsonify({
+            "status": 400,
+            "message": "Error: Data must be sent as JSON.",
+            "data": {}
+        })
+
+    data = request.get_json()
+    name = data.get("name")
+    amount = data.get("amount")
+    obtained = data.get("obtained")
+
+    record = db.session.query(Shoppingingredient).filter(Shoppingingredient.id == id).first()
+    if name is not None:
+        record.name = name
+    if amount is not None:
+        record.amount = amount
+    if obtained is not None:
+        record.obtained = obtained
+
+    db.session.commit()
+
+    return jsonify({
+        "status": 200,
+        "message": "Shoppingingredient Updated",
+        "data": shoppingingredient_schema.dump(record)
+    })
+
+@app.route("/shoppingingredient/delete/<id>", methods=["DELETE"])
+def delete_shoppingingredient(id):
+    record = db.session.query(Shoppingingredient).filter(Shoppingingredient.id == id).first()
+    db.session.delete(record)
+    db.session.commit()
+    return jsonify({
+        "status": 200,
+        "message": "Shoppingingredient Deleted",
+        "data": shoppingingredient_schema.dump(record)
     })
 
 if __name__ == "__main__":
