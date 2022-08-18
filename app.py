@@ -17,12 +17,27 @@ bcrypt = Bcrypt(app)
 CORS(app)
 
 # SQLAlchemy Tables
+shared_mealplans_table = db.Table('shared_mealplans_table',
+    db.Column('user_id', db.Integer, db.ForeignKey('user.id')),
+    db.Column('mealplan_id', db.Integer, db.ForeignKey('mealplan.id'))
+)
+
+shared_shoppinglist_table = db.Table('shared_shoppinglist_table',
+    db.Column('user_id', db.Integer, db.ForeignKey('user.id')),
+    db.Column('shoppinglist_id', db.Integer, db.ForeignKey('shoppinglist.id'))
+)
+
+
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String, nullable=False, unique=True)
     password = db.Column(db.String, nullable=False, unique=False)
     email = db.Column(db.String, nullable=False, unique=False)
     meals = db.relationship("Meal", backref="user", cascade='all, delete, delete-orphan')
+    mealplans = db.relationship("Mealplan", backref="user", cascade='all, delete, delete-orphan')
+    shoppinglists = db.relationship("Shoppinglist", backref="user", cascade='all, delete, delete-orphan')
+    shared_mealplans = db.relationship("Mealplan", secondary="shared_mealplans_table")
+    shared_shoppinglists = db.relationship("Shoppinglist", secondary="shared_shoppinglist_table")
     
     def __init__(self, username, password, email):
         self.username = username
@@ -74,7 +89,62 @@ class Ingredient(db.Model):
         self.amount = amount
         self.recipe_id = recipe_id
 
+class Mealplan(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String, nullable=False, unique=False)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    shoppinglist = db.relationship("Shoppinglist", backref="mealplan", cascade='all, delete, delete-orphan')
+    
+    def __init__(self, name, user_id):
+        self.name = name
+        self.user_id = user_id
+
+class Shoppinglist(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    mealplan_id = db.Column(db.Integer, db.ForeignKey("mealplan.id"), nullable=True)
+    shoppingingredients = db.relationship("Shoppingingredient", backref="shoppinglist", cascade='all, delete, delete-orphan')
+    
+    def __init__(self, mealplan_id):
+        self.mealplan_id = mealplan_id
+
+class Shoppingingredient(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String, nullable=False, unique=False)
+    amount = db.Column(db.String, nullable=False, unique=False)
+    obtained = db.Column(db.Boolean, nullable=False, unique=False)
+    shoppinglist_id = db.Column(db.Integer, db.ForeignKey("shoppinglist.id"), nullable=False)
+    
+    def __init__(self, name, amount, obtained, shoppinglist_id):
+        self.name = name
+        self.amount = amount
+        self.obtained = False
+        self.shoppinglist_id = shoppinglist_id
+
 # Marshmallow Schemas
+class ShoppingingredientSchema(ma.Schema):
+    class Meta:
+        fields = ("id", "name", "amount", "obtained", "shoppinglist_id")
+
+shoppingingredient_schema = ShoppingingredientSchema()
+multiple_shoppingingredient_schema = ShoppingingredientSchema(many=True)
+
+class ShoppinglistSchema(ma.Schema):
+    class Meta:
+        fields = ("id", "mealplan_id", "shoppingingredients")
+    shoppingingredients = ma.Nested(multiple_shoppingingredient_schema)
+
+shoppinglist_schema = ShoppinglistSchema()
+multiple_shoppinglist_schema = ShoppinglistSchema(many=True)
+
+class MealplanSchema(ma.Schema):
+    class Meta:
+        fields = ("id", "name", "user_id", "shoppinglist")
+    shoppinglist = base_fields.Function(lambda fields: shoppinglist_schema.dump(fields.shoppinglist[0] if len(fields.shoppinglist) > 0 else None))
+
+mealplan_schema = MealplanSchema()
+multiple_mealplan_schema = MealplanSchema(many=True)
+
 class IngredientSchema(ma.Schema):
     class Meta:
         fields = ("id", "name", "amount", "recipe_id")
@@ -108,8 +178,12 @@ multiple_meal_schema = MealSchema(many=True)
 
 class UserSchema(ma.Schema):
     class Meta:
-        fields = ("id", "username", "email", "meals")
+        fields = ("id", "username", "email", "meals", "mealplans", "shoppinglists", "shared_mealplans", "shared_shoppinglists")
     meals = ma.Nested(multiple_meal_schema)
+    mealplans = ma.Nested(multiple_mealplan_schema)
+    shoppinglists = ma.Nested(multiple_shoppinglist_schema)
+    shared_mealplans = ma.Nested(multiple_mealplan_schema)
+    shared_shoppinglists = ma.Nested(multiple_shoppinglist_schema)
 
 user_schema = UserSchema()
 multiple_user_schema = UserSchema(many=True)
