@@ -672,6 +672,34 @@ def add_mealplan():
         "data": mealplan_schema.dump(record)
     })
 
+@app.route("/mealplan/share", methods=["POST"])
+def share_mealplan():
+    if request.content_type != "application/json":
+        return jsonify({
+            "status": 400,
+            "message": "Error: Data must be sent as JSON.",
+            "data": {}
+        })
+
+    data = request.get_json()
+    mealplan_id = data.get("mealplan_id")
+    user_id = data.get("user_id")
+
+    shared_user = db.session.query(User).filter(User.id == user_id).first()
+    shared_mealplan = db.session.query(Mealplan).filter(Mealplan.id == mealplan_id).first()
+
+    shared_user.shared_mealplans.append(shared_mealplan)
+    db.session.commit()
+
+    return jsonify({
+        "status": 200,
+        "message": "Mealplan Shared",
+        "data": {
+            "Mealplan": mealplan_schema.dump(shared_mealplan),
+            "User": user_schema.dump(shared_user)
+        }
+    })
+
 @app.route("/mealplan/get", methods=["GET"])
 def get_all_mealplans():
     records = db.session.query(Mealplan).all()
