@@ -648,5 +648,74 @@ def delete_ingredient(id):
         "data": ingredient_schema.dump(record)
     })
 
+
+@app.route("/mealplan/add", methods=["POST"])
+def add_mealplan():
+    if request.content_type != "application/json":
+        return jsonify({
+            "status": 400,
+            "message": "Error: Data must be sent as JSON.",
+            "data": {}
+        })
+
+    data = request.get_json()
+    name = data.get("name")
+    user_id = data.get("user_id")
+
+    record = Mealplan(name, user_id)
+    db.session.add(record)
+    db.session.commit()
+
+    return jsonify({
+        "status": 200,
+        "message": "Mealplan Added",
+        "data": mealplan_schema.dump(record)
+    })
+
+@app.route("/mealplan/get", methods=["GET"])
+def get_all_mealplans():
+    records = db.session.query(Mealplan).all()
+    return jsonify(multiple_mealplan_schema.dump(records))
+
+@app.route("/mealplan/get/<id>", methods=["GET"])
+def get_mealplan_by_id(id):
+    record = db.session.query(Mealplan).filter(Mealplan.id == id).first()
+    return jsonify(mealplan_schema.dump(record))
+
+@app.route("/mealplan/update/<id>", methods=["PUT"])
+def update_mealplan(id):
+    if request.content_type != "application/json":
+        return jsonify({
+            "status": 400,
+            "message": "Error: Data must be sent as JSON.",
+            "data": {}
+        })
+
+    data = request.get_json()
+    name = data.get("name")
+
+    record = db.session.query(Mealplan).filter(Mealplan.id == id).first()
+    if name is not None:
+        record.name = name
+
+    db.session.commit()
+
+    return jsonify({
+        "status": 200,
+        "message": "Mealplan Updated",
+        "data": mealplan_schema.dump(record)
+    })
+
+@app.route("/mealplan/delete/<id>", methods=["DELETE"])
+def delete_mealplan(id):
+    record = db.session.query(Mealplan).filter(Mealplan.id == id).first()
+    db.session.delete(record)
+    db.session.commit()
+    return jsonify({
+        "status": 200,
+        "message": "Mealplan Deleted",
+        "data": mealplan_schema.dump(record)
+    })
+
 if __name__ == "__main__":
     app.run(debug=True)
