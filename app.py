@@ -84,16 +84,18 @@ class Meal(db.Model):
     name = db.Column(db.String, nullable=False, unique=False)
     description = db.Column(db.String, nullable=True, unique=False)
     image_url = db.Column(db.String, nullable=True, unique=False)
+    sleep_until = db.Column(db.String, nullable=True, unique=False)
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     recipe = db.relationship("Recipe", backref="meal", cascade='all, delete, delete-orphan')
     categories = db.relationship("Category", secondary="categories_table")
     mealplans = db.relationship("Mealplan", secondary="mealplans_table")
     shared_users = db.relationship("User", secondary="shared_meals_table")
     
-    def __init__(self, name, description, image_url, user_id):
+    def __init__(self, name, description, image_url, sleep_until, user_id):
         self.name = name
         self.description = description
         self.image_url = image_url
+        self.sleep_until = None
         self.user_id = user_id
 
 class Category(db.Model):
@@ -140,25 +142,29 @@ class Ingredient(db.Model):
 class Mealplan(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String, nullable=False, unique=False)
+    created_on = db.Column(db.String, nullable=False, unique=False)
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     meals = db.relationship("Meal", secondary="mealplans_table")
     shoppinglist = db.relationship("Shoppinglist", backref="mealplan", cascade='all, delete, delete-orphan')
     shared_users = db.relationship("User", secondary="shared_mealplans_table")
     
-    def __init__(self, name, user_id):
+    def __init__(self, name, created_on, user_id):
         self.name = name
+        self.created_on = created_on
         self.user_id = user_id
 
 class Shoppinglist(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String, nullable=False, unique=False)
+    created_on = db.Column(db.String, nullable=False, unique=False)
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     mealplan_id = db.Column(db.Integer, db.ForeignKey("mealplan.id"), nullable=True)
     shoppingingredients = db.relationship("Shoppingingredient", backref="shoppinglist", cascade='all, delete, delete-orphan')
     shared_users = db.relationship("User", secondary="shared_shoppinglists_table")
     
-    def __init__(self, name, user_id, mealplan_id):
+    def __init__(self, name, created_on, user_id, mealplan_id):
         self.name = name
+        self.created_on = created_on
         self.user_id = user_id
         self.mealplan_id = mealplan_id
 
@@ -187,7 +193,7 @@ multiple_shoppingingredient_schema = ShoppingingredientSchema(many=True)
 
 class ShoppinglistSchema(ma.Schema):
     class Meta:
-        fields = ("id", "name", "user_id", "mealplan_id", "shoppingingredients")
+        fields = ("id", "name", "created_on", "user_id", "mealplan_id", "shoppingingredients")
     shoppingingredients = ma.Nested(multiple_shoppingingredient_schema)
 
 shoppinglist_schema = ShoppinglistSchema()
@@ -225,7 +231,7 @@ multiple_category_schema = CategorySchema(many=True)
 
 class MealSchema(ma.Schema):
     class Meta:
-        fields = ("id", "name", "description", "image_url", "categories", "user_id", "recipe")
+        fields = ("id", "name", "description", "image_url", "sleep_until", "categories", "user_id", "recipe")
     categories = ma.Nested(multiple_category_schema)
     recipe = base_fields.Function(lambda fields: recipe_schema.dump(fields.recipe[0] if len(fields.recipe) > 0 else None))
 
@@ -234,7 +240,7 @@ multiple_meal_schema = MealSchema(many=True)
 
 class MealplanSchema(ma.Schema):
     class Meta:
-        fields = ("id", "name", "meals", "user_id", "shoppinglist")
+        fields = ("id", "name", "created_on", "meals", "user_id", "shoppinglist")
     meals = ma.Nested(multiple_meal_schema)
     shoppinglist = base_fields.Function(lambda fields: shoppinglist_schema.dump(fields.shoppinglist[0] if len(fields.shoppinglist) > 0 else None))
 
@@ -633,6 +639,7 @@ def update_meal(id):
     name = data.get("name")
     description = data.get("description")
     image_url = data.get("image_url")
+    sleep_until = data.get("sleep_until")
 
     record = db.session.query(Meal).filter(Meal.id == id).first()
     if name is not None:
@@ -641,6 +648,8 @@ def update_meal(id):
         record.description = description
     if image_url is not None:
         record.image_url = image_url
+    if sleep_until is not None:
+        record.sleep_until = sleep_until
 
     db.session.commit()
 
@@ -1076,10 +1085,11 @@ def add_mealplan():
 
     data = request.get_json()
     name = data.get("name")
+    created_on = data.get("created_on")
     user_id = data.get("user_id")
     meals = data.get("meals")
 
-    record = Mealplan(name, user_id)
+    record = Mealplan(name, created_on, user_id)
     db.session.add(record)
     db.session.commit()
 
@@ -1214,10 +1224,11 @@ def add_shoppinglist():
 
     data = request.get_json()
     name = data.get("name")
+    created_on = data.get("created_on")
     user_id = data.get("user_id")
     mealplan_id = data.get("mealplan_id")
 
-    record = Shoppinglist(name, user_id, mealplan_id)
+    record = Shoppinglist(name, created_on, user_id, mealplan_id)
     db.session.add(record)
     db.session.commit()
 
