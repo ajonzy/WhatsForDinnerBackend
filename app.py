@@ -17,6 +17,11 @@ bcrypt = Bcrypt(app)
 CORS(app)
 
 # SQLAlchemy Tables
+categories_table = db.Table('categories_table',
+    db.Column('meal_id', db.Integer, db.ForeignKey('meal.id')),
+    db.Column('category_id', db.Integer, db.ForeignKey('category.id'))
+)
+
 mealplans_table = db.Table('mealplans_table',
     db.Column('mealplan_id', db.Integer, db.ForeignKey('mealplan.id')),
     db.Column('meal_id', db.Integer, db.ForeignKey('meal.id'))
@@ -59,6 +64,7 @@ class User(db.Model):
     password = db.Column(db.String, nullable=False, unique=False)
     email = db.Column(db.String, nullable=False, unique=False)
     meals = db.relationship("Meal", backref="user", cascade='all, delete, delete-orphan')
+    categories = db.relationship("Category", backref="user", cascade='all, delete, delete-orphan')
     mealplans = db.relationship("Mealplan", backref="user", cascade='all, delete, delete-orphan')
     shoppinglists = db.relationship("Shoppinglist", backref="user", cascade='all, delete, delete-orphan')
     shared_meals = db.relationship("Meal", secondary="shared_meals_table")
@@ -80,6 +86,7 @@ class Meal(db.Model):
     image_url = db.Column(db.String, nullable=True, unique=False)
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     recipe = db.relationship("Recipe", backref="meal", cascade='all, delete, delete-orphan')
+    categories = db.relationship("Category", secondary="categories_table")
     mealplans = db.relationship("Mealplan", secondary="mealplans_table")
     shared_users = db.relationship("User", secondary="shared_meals_table")
     
@@ -87,6 +94,16 @@ class Meal(db.Model):
         self.name = name
         self.description = description
         self.image_url = image_url
+        self.user_id = user_id
+
+class Category(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String, nullable=False, unique=False)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    meals = db.relationship("Meal", secondary="categories_table")
+    
+    def __init__(self, name, user_id):
+        self.name = name
         self.user_id = user_id
 
 class Recipe(db.Model):
@@ -199,9 +216,17 @@ class RecipeSchema(ma.Schema):
 recipe_schema = RecipeSchema()
 multiple_recipe_schema = RecipeSchema(many=True)
 
+class CategorySchema(ma.Schema):
+    class Meta:
+        fields = ("id", "name", "user_id")
+
+category_schema = CategorySchema()
+multiple_category_schema = CategorySchema(many=True)
+
 class MealSchema(ma.Schema):
     class Meta:
-        fields = ("id", "name", "description", "image_url", "user_id", "recipe")
+        fields = ("id", "name", "description", "image_url", "categories", "user_id", "recipe")
+    categories = ma.Nested(multiple_category_schema)
     recipe = base_fields.Function(lambda fields: recipe_schema.dump(fields.recipe[0] if len(fields.recipe) > 0 else None))
 
 meal_schema = MealSchema()
@@ -218,8 +243,9 @@ multiple_mealplan_schema = MealplanSchema(many=True)
 
 class UserSchema(ma.Schema):
     class Meta:
-        fields = ("id", "username", "email", "meals", "mealplans", "shoppinglists", "shared_meals", "shared_mealplans", "shared_shoppinglists", "outgoing_friend_requests", "incoming_friend_requests", "friends")
+        fields = ("id", "username", "email", "meals", "categories", "mealplans", "shoppinglists", "shared_meals", "shared_mealplans", "shared_shoppinglists", "outgoing_friend_requests", "incoming_friend_requests", "friends")
     meals = ma.Nested(multiple_meal_schema)
+    categories = ma.Nested(multiple_category_schema)
     mealplans = ma.Nested(multiple_mealplan_schema)
     shoppinglists = ma.Nested(multiple_shoppinglist_schema)
     shared_meals = ma.Nested(multiple_meal_schema)
@@ -662,6 +688,129 @@ def unshare_meal(id, user_id):
     })
 
 
+@app.route("/category/add", methods=["POST"])
+def add_category():
+    if request.content_type != "application/json":
+        return jsonify({
+            "status": 400,
+            "message": "Error: Data must be sent as JSON.",
+            "data": {}
+        })
+
+    data = request.get_json()
+    name = data.get("name")
+    user_id = data.get("user_id")
+
+    record = Category(name, user_id)
+    db.session.add(record)
+    db.session.commit()
+
+    return jsonify({
+        "status": 200,
+        "message": "Category Added",
+        "data": category_schema.dump(record)
+    })
+
+@app.route("/category/add/multiple", methods=["POST"])
+def add_multiple_categories():
+    if request.content_type != "application/json":
+        return jsonify({
+            "status": 400,
+            "message": "Error: Data must be sent as JSON.",
+            "data": {}
+        })
+
+    data = request.get_json()
+    records = []
+    for data in data:
+        name = data.get("name")
+        user_id = data.get("user_id")
+
+        record = Category(name, user_id)
+        db.session.add(record)
+        db.session.commit()
+
+        records.append(record)
+
+    return jsonify({
+        "status": 200,
+        "message": "Categories Added",
+        "data": multiple_category_schema.dump(records)
+    })
+
+@app.route("/category/attach", methods=["POST"])
+def attach_category():
+    if request.content_type != "application/json":
+        return jsonify({
+            "status": 400,
+            "message": "Error: Data must be sent as JSON.",
+            "data": {}
+        })
+
+    data = request.get_json()
+    category_id = data.get("category_id")
+    meal_id = data.get("meal_id")
+
+    record = db.session.query(Category).filter(Category.id == category_id).first()
+    meal = db.session.query(Meal).filter(Meal.id == meal_id).first()
+    meal.categories.append(record)
+    db.session.commit()
+
+    return jsonify({
+        "status": 200,
+        "message": "Category Attached",
+        "data": {
+            "Category": category_schema.dump(record),
+            "Meal": meal_schema.dump(meal)
+        }
+    })
+
+@app.route("/category/get", methods=["GET"])
+def get_all_categories():
+    records = db.session.query(Category).all()
+    return jsonify(multiple_category_schema.dump(records))
+
+@app.route("/category/get/<id>", methods=["GET"])
+def get_category_by_id(id):
+    record = db.session.query(Category).filter(Category.id == id).first()
+    return jsonify(category_schema.dump(record))
+
+@app.route("/category/update/<id>", methods=["PUT"])
+def update_category(id):
+    if request.content_type != "application/json":
+        return jsonify({
+            "status": 400,
+            "message": "Error: Data must be sent as JSON.",
+            "data": {}
+        })
+
+    data = request.get_json()
+    name = data.get("name")
+
+    record = db.session.query(Category).filter(Category.id == id).first()
+    if name is not None:
+        record.name = name
+
+    db.session.commit()
+
+    return jsonify({
+        "status": 200,
+        "message": "Category Updated",
+        "data": category_schema.dump(record)
+    })
+
+@app.route("/category/delete/<id>", methods=["DELETE"])
+def delete_category(id):
+    record = db.session.query(Category).filter(Category.id == id).first()
+    db.session.delete(record)
+    db.session.commit()
+    return jsonify({
+        "status": 200,
+        "message": "Category Deleted",
+        "data": category_schema.dump(record)
+    })
+
+
 @app.route("/recipe/add", methods=["POST"])
 def add_recipe():
     if request.content_type != "application/json":
@@ -1043,7 +1192,7 @@ def unshare_mealplan(id, user_id):
     if len(record.shoppinglist) > 0:
         shared_user.shared_shoppinglists.remove(record.shoppinglist)
         db.session.commit()
-        
+
     return jsonify({
         "status": 200,
         "message": "Mealplan Share Deleted",
