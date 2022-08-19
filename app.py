@@ -32,6 +32,21 @@ shared_shoppinglists_table = db.Table('shared_shoppinglists_table',
     db.Column('shoppinglist_id', db.Integer, db.ForeignKey('shoppinglist.id'))
 )
 
+outgoing_friend_requests_table = db.Table('outgoing_friend_requests_table',
+    db.Column('user_id', db.Integer, db.ForeignKey('user.id')),
+    db.Column('friend_id', db.Integer, db.ForeignKey('user.id'))
+)
+
+incoming_friend_requests_table = db.Table('incoming_friend_requests_table',
+    db.Column('user_id', db.Integer, db.ForeignKey('user.id')),
+    db.Column('friend_id', db.Integer, db.ForeignKey('user.id'))
+)
+
+friends_table = db.Table('friends_table',
+    db.Column('user_id', db.Integer, db.ForeignKey('user.id')),
+    db.Column('friend_id', db.Integer, db.ForeignKey('user.id'))
+)
+
 
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -43,6 +58,9 @@ class User(db.Model):
     shoppinglists = db.relationship("Shoppinglist", backref="user", cascade='all, delete, delete-orphan')
     shared_mealplans = db.relationship("Mealplan", secondary="shared_mealplans_table")
     shared_shoppinglists = db.relationship("Shoppinglist", secondary="shared_shoppinglists_table")
+    outgoing_friend_requests = db.relationship("User", secondary="outgoing_friend_requests_table", primaryjoin=id==outgoing_friend_requests_table.c.user_id, secondaryjoin=id==outgoing_friend_requests_table.c.friend_id)
+    incoming_friend_requests = db.relationship("User", secondary="incoming_friend_requests_table", primaryjoin=id==incoming_friend_requests_table.c.user_id, secondaryjoin=id==incoming_friend_requests_table.c.friend_id)
+    friends = db.relationship("User", secondary="friends_table", primaryjoin=id==friends_table.c.user_id, secondaryjoin=id==friends_table.c.friend_id)
     
     def __init__(self, username, password, email):
         self.username = username
@@ -193,12 +211,15 @@ multiple_mealplan_schema = MealplanSchema(many=True)
 
 class UserSchema(ma.Schema):
     class Meta:
-        fields = ("id", "username", "email", "meals", "mealplans", "shoppinglists", "shared_mealplans", "shared_shoppinglists")
+        fields = ("id", "username", "email", "meals", "mealplans", "shoppinglists", "shared_mealplans", "shared_shoppinglists", "outgoing_friend_requests", "incoming_friend_requests", "friends")
     meals = ma.Nested(multiple_meal_schema)
     mealplans = ma.Nested(multiple_mealplan_schema)
     shoppinglists = ma.Nested(multiple_shoppinglist_schema)
     shared_mealplans = ma.Nested(multiple_mealplan_schema)
     shared_shoppinglists = ma.Nested(multiple_shoppinglist_schema)
+    outgoing_friend_requests = base_fields.Function(lambda fields: list(map(lambda friend: { "user_id": friend.id, "username": friend.username }, fields.outgoing_friend_requests)))
+    incoming_friend_requests = base_fields.Function(lambda fields: list(map(lambda friend: { "user_id": friend.id, "username": friend.username }, fields.incoming_friend_requests)))
+    friends = base_fields.Function(lambda fields: list(map(lambda friend: { "user_id": friend.id, "username": friend.username }, fields.friends)))
 
 user_schema = UserSchema()
 multiple_user_schema = UserSchema(many=True)
@@ -236,6 +257,85 @@ def add_user():
         "status": 200,
         "message": "User Added",
         "data": user_schema.dump(record)
+    })
+
+@app.route("/user/login", methods=["POST"])
+def login_user():
+    if request.content_type != "application/json":
+        return jsonify({
+            "status": 400,
+            "message": "Error: Data must be sent as JSON.",
+            "data": {}
+        })
+
+    data = request.get_json()
+    username = data.get("username")
+    password = data.get("password")
+
+    record = db.session.query(User).filter(User.username == username).first()
+    if record is None:
+        return jsonify({
+            "status": 400,
+            "message": "Invalid username or password",
+            "data": {}
+        })
+
+    password_check = bcrypt.check_password_hash(record.password, password)
+    if password_check is False:
+        return jsonify({
+            "status": 400,
+            "message": "Invalid username or password",
+            "data": {}
+        })
+
+    return jsonify({
+        "status": 200,
+        "message": "Valid username and password",
+        "data": user_schema.dump(record)
+    })
+
+@app.route("/user/friend/request", methods=["POST"])
+def request_friend():
+    if request.content_type != "application/json":
+        return jsonify({
+            "status": 400,
+            "message": "Error: Data must be sent as JSON.",
+            "data": {}
+        })
+
+    data = request.get_json()
+    user_id = data.get("user_id")
+    friend_id = data.get("friend_id")
+
+    user = db.session.query(User).filter(User.id == user_id).first()
+    friend = db.session.query(User).filter(User.id == friend_id).first()
+
+    if user.friends.count(friend) > 0:
+        return jsonify({
+            "status": 400,
+            "message": "User already friended.",
+            "data": {}
+        })
+    if user.outgoing_friend_requests.count(friend) > 0:
+        return jsonify({
+            "status": 400,
+            "message": "Friend request already sent.",
+            "data": {}
+        })
+
+    user.outgoing_friend_requests.append(friend)
+    db.session.commit()
+
+    friend.incoming_friend_requests.append(user)
+    db.session.commit()
+
+    return jsonify({
+        "status": 200,
+        "message": "Friend Request Added",
+        "data": {
+            "User": user_schema.dump(user),
+            "Friend": user_schema.dump(friend)
+        }
     })
 
 @app.route("/user/get", methods=["GET"])
@@ -289,6 +389,11 @@ def update_user(id):
 @app.route("/user/delete/<id>", methods=["DELETE"])
 def delete_user(id):
     record = db.session.query(User).filter(User.id == id).first()
+    for friend in record.friends:
+        friend.friends.remove(record)
+        db.session.commit()
+        friend.incoming_friend_requests.remove(record)
+        db.session.commit()
     db.session.delete(record)
     db.session.commit()
     return jsonify({
@@ -297,39 +402,124 @@ def delete_user(id):
         "data": user_schema.dump(record)
     })
 
-@app.route("/user/login", methods=["POST"])
-def login_user():
-    if request.content_type != "application/json":
+@app.route("/user/friend/cancel/<id>/<friend_id>", methods=["DELETE"])
+def cancel_friend_request(id, friend_id):
+    user = db.session.query(User).filter(User.id == id).first()
+    friend = db.session.query(User).filter(User.id == friend_id).first()
+    
+    if user.outgoing_friend_requests.count(friend) == 0:
         return jsonify({
-            "status": 400,
-            "message": "Error: Data must be sent as JSON.",
-            "data": {}
-        })
+                "status": 400,
+                "message": "Error: Friend request does not exist.",
+                "data": {}
+            })
 
-    data = request.get_json()
-    username = data.get("username")
-    password = data.get("password")
+    user.outgoing_friend_requests.remove(friend)
+    db.session.commit()
 
-    record = db.session.query(User).filter(User.username == username).first()
-    if record is None:
-        return jsonify({
-            "status": 400,
-            "message": "Invalid username or password",
-            "data": {}
-        })
-
-    password_check = bcrypt.check_password_hash(record.password, password)
-    if password_check is False:
-        return jsonify({
-            "status": 400,
-            "message": "Invalid username or password",
-            "data": {}
-        })
+    friend.incoming_friend_requests.remove(user)
+    db.session.commit()
 
     return jsonify({
         "status": 200,
-        "message": "Valid username and password",
-        "data": user_schema.dump(record)
+        "message": "Friend Request Deleted",
+        "data": {
+            "User": user_schema.dump(user),
+            "Friend": user_schema.dump(friend)
+        }
+    })
+
+@app.route("/user/friend/accept/<id>/<friend_id>", methods=["DELETE"])
+def accept_friend_request(id, friend_id):
+    user = db.session.query(User).filter(User.id == id).first()
+    friend = db.session.query(User).filter(User.id == friend_id).first()
+    
+    if user.incoming_friend_requests.count(friend) == 0:
+        return jsonify({
+                "status": 400,
+                "message": "Error: Friend request does not exist.",
+                "data": {}
+            })
+
+    user.friends.append(friend)
+    db.session.commit()
+
+    friend.friends.append(user)
+    db.session.commit()
+
+    user.incoming_friend_requests.remove(friend)
+    db.session.commit()
+
+    friend.outgoing_friend_requests.remove(user)
+    db.session.commit()
+
+    if user.outgoing_friend_requests.count(friend) > 0:
+        user.outgoing_friend_requests.remove(friend)
+        db.session.commit()
+        friend.incoming_friend_requests.remove(user)
+        db.session.commit()
+
+    return jsonify({
+        "status": 200,
+        "message": "Friend Added",
+        "data": {
+            "User": user_schema.dump(user),
+            "Friend": user_schema.dump(friend)
+        }
+    })
+
+@app.route("/user/friend/reject/<id>/<friend_id>", methods=["DELETE"])
+def reject_friend_request(id, friend_id):
+    user = db.session.query(User).filter(User.id == id).first()
+    friend = db.session.query(User).filter(User.id == friend_id).first()
+    
+    if user.incoming_friend_requests.count(friend) == 0:
+        return jsonify({
+                "status": 400,
+                "message": "Error: Friend request does not exist.",
+                "data": {}
+            })
+
+    user.incoming_friend_requests.remove(friend)
+    db.session.commit()
+
+    friend.outgoing_friend_requests.remove(user)
+    db.session.commit()
+
+    return jsonify({
+        "status": 200,
+        "message": "Friend Request Deleted",
+        "data": {
+            "User": user_schema.dump(user),
+            "Friend": user_schema.dump(friend)
+        }
+    })
+
+@app.route("/user/friend/delete/<id>/<friend_id>", methods=["DELETE"])
+def delete_friend(id, friend_id):
+    user = db.session.query(User).filter(User.id == id).first()
+    friend = db.session.query(User).filter(User.id == friend_id).first()
+    
+    if user.friends.count(friend) == 0:
+        return jsonify({
+                "status": 400,
+                "message": "Error: Friend does not exist.",
+                "data": {}
+            })
+
+    user.friends.remove(friend)
+    db.session.commit()
+
+    friend.friends.remove(user)
+    db.session.commit()
+
+    return jsonify({
+        "status": 200,
+        "message": "Friend Deleted",
+        "data": {
+            "User": user_schema.dump(user),
+            "Friend": user_schema.dump(friend)
+        }
     })
 
 
