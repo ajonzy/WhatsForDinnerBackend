@@ -3,13 +3,18 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_marshmallow import Marshmallow, base_fields
 from flask_cors import CORS
 from flask_bcrypt import Bcrypt
+from werkzeug.middleware.proxy_fix import ProxyFix
 from dotenv import load_dotenv
+
 import os
+import random
+import string
 
 load_dotenv()
 
 app = Flask(__name__)
 app.config["SQLALCHEMY_DATABASE_URI"] = "postgresql://" + os.environ.get("DATABASE_URL").partition("://")[2]
+app.wsgi_app = ProxyFix(app.wsgi_app)
 
 db = SQLAlchemy(app)
 ma = Marshmallow(app)
@@ -63,6 +68,7 @@ class User(db.Model):
     username = db.Column(db.String, nullable=False, unique=True)
     password = db.Column(db.String, nullable=False, unique=False)
     email = db.Column(db.String, nullable=False, unique=False)
+    sessions = db.relationship("Session", backref="user", cascade='all, delete, delete-orphan')
     meals = db.relationship("Meal", backref="user", cascade='all, delete, delete-orphan')
     categories = db.relationship("Category", backref="user", cascade='all, delete, delete-orphan')
     mealplans = db.relationship("Mealplan", backref="user", cascade='all, delete, delete-orphan')
@@ -78,6 +84,17 @@ class User(db.Model):
         self.username = username
         self.password = password
         self.email = email
+
+class Session(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    token = db.Column(db.String, nullable=False, unique=True)
+    ip = db.Column(db.String, nullable=False, unique=False)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    
+    def __init__(self, token, ip, user_id):
+        self.token = token
+        self.ip = ip
+        self.user_id = user_id
 
 class Meal(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -265,6 +282,7 @@ user_schema = UserSchema()
 multiple_user_schema = UserSchema(many=True)
 
 # Flask Endpoints
+# TODO Remove sensitive enpoints: get_user_by_id and delete_user(change to secure token)
 @app.route("/user/add", methods=["POST"])
 def add_user():
     if request.content_type != "application/json":
@@ -293,10 +311,23 @@ def add_user():
     db.session.add(record)
     db.session.commit()
 
+    token = ''.join(random.SystemRandom().choice(string.ascii_uppercase + string.ascii_lowercase + string.digits) for _ in range(16))
+    while db.session.query(Session).filter(Session.token == token).first() != None:
+        token = ''.join(random.SystemRandom().choice(string.ascii_uppercase + string.ascii_lowercase + string.digits) for _ in range(16))
+
+    hashed_ip = bcrypt.generate_password_hash(request.remote_addr).decode("utf-8")
+
+    session = Session(token, hashed_ip, record.id)
+    db.session.add(session)
+    db.session.commit()
+
     return jsonify({
         "status": 200,
         "message": "User Added",
-        "data": user_schema.dump(record)
+        "data": {
+            "User": user_schema.dump(record),
+            "Token": token
+        }
     })
 
 @app.route("/user/login", methods=["POST"])
@@ -328,10 +359,23 @@ def login_user():
             "data": {}
         })
 
+    token = ''.join(random.SystemRandom().choice(string.ascii_uppercase + string.ascii_lowercase + string.digits) for _ in range(16))
+    while db.session.query(Session).filter(Session.token == token).first() != None:
+        token = ''.join(random.SystemRandom().choice(string.ascii_uppercase + string.ascii_lowercase + string.digits) for _ in range(16))
+
+    hashed_ip = bcrypt.generate_password_hash(request.remote_addr).decode("utf-8")
+
+    session = Session(token, hashed_ip, record.id)
+    db.session.add(session)
+    db.session.commit()
+
     return jsonify({
         "status": 200,
         "message": "Valid username and password",
-        "data": user_schema.dump(record)
+        "data": {
+            "User": user_schema.dump(record),
+            "Token": token
+        }
     })
 
 @app.route("/user/friend/request", methods=["POST"])
@@ -383,9 +427,28 @@ def get_all_users():
     records = db.session.query(User).all()
     return jsonify(multiple_user_schema.dump(records))
 
-@app.route("/user/get/<id>", methods=["GET"])
+@app.route("/user/get/id/<id>", methods=["GET"])
 def get_user_by_id(id):
     record = db.session.query(User).filter(User.id == id).first()
+    return jsonify(user_schema.dump(record))
+
+@app.route("/user/get/token/<token>", methods=["GET"])
+def get_user_by_token(token):
+    session = db.session.query(Session).filter(Session.token == token).first()
+    if session is None:
+        return jsonify({
+            "status": 403,
+            "message": "User not authenticated.",
+            "data": {}
+        })
+    if bcrypt.check_password_hash(session.ip, request.remote_addr) is False:
+        return jsonify({
+            "status": 403,
+            "message": "User not authenticated.",
+            "data": {}
+        })
+
+    record = db.session.query(User).filter(User.id == session.user_id).first()
     return jsonify(user_schema.dump(record))
 
 @app.route("/user/update/<id>", methods=["PUT"])
@@ -440,6 +503,29 @@ def delete_user(id):
         "status": 200,
         "message": "User Deleted",
         "data": user_schema.dump(record)
+    })
+
+@app.route("/user/logout/single/<token>", methods=["DELETE"])
+def logout_user(token):
+    record = db.session.query(Session).filter(Session.token == token).first()
+    db.session.delete(record)
+    db.session.commit()
+    return jsonify({
+        "status": 200,
+        "message": "User Logged Out",
+        "data": {}
+    })
+
+@app.route("/user/logout/all/<id>", methods=["DELETE"])
+def logout_user_all(id):
+    record = db.session.query(User).filter(User.id == id).first()
+    for session in record.sessions:
+        db.session.delete(session)
+        db.session.commit()
+    return jsonify({
+        "status": 200,
+        "message": "User Logged Out",
+        "data": {}
     })
 
 @app.route("/user/friend/cancel/<id>/<friend_id>", methods=["DELETE"])
