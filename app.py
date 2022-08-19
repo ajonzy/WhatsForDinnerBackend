@@ -17,6 +17,11 @@ bcrypt = Bcrypt(app)
 CORS(app)
 
 # SQLAlchemy Tables
+mealplans_table = db.Table('mealplans_table',
+    db.Column('mealplan_id', db.Integer, db.ForeignKey('mealplan.id')),
+    db.Column('meal_id', db.Integer, db.ForeignKey('meal.id'))
+)
+
 shared_mealplans_table = db.Table('shared_mealplans_table',
     db.Column('user_id', db.Integer, db.ForeignKey('user.id')),
     db.Column('mealplan_id', db.Integer, db.ForeignKey('mealplan.id'))
@@ -51,6 +56,7 @@ class Meal(db.Model):
     image_url = db.Column(db.String, nullable=True, unique=False)
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     recipe = db.relationship("Recipe", backref="meal", cascade='all, delete, delete-orphan')
+    mealplans = db.relationship("Mealplan", secondary="mealplans_table")
     
     def __init__(self, name, description, image_url, user_id):
         self.name = name
@@ -93,6 +99,7 @@ class Mealplan(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String, nullable=False, unique=False)
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    meals = db.relationship("Meal", secondary="mealplans_table")
     shoppinglist = db.relationship("Shoppinglist", backref="mealplan", cascade='all, delete, delete-orphan')
     shared_users = db.relationship("User", secondary="shared_mealplans_table")
     
@@ -102,12 +109,14 @@ class Mealplan(db.Model):
 
 class Shoppinglist(db.Model):
     id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String, nullable=False, unique=False)
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     mealplan_id = db.Column(db.Integer, db.ForeignKey("mealplan.id"), nullable=True)
     shoppingingredients = db.relationship("Shoppingingredient", backref="shoppinglist", cascade='all, delete, delete-orphan')
     shared_users = db.relationship("User", secondary="shared_shoppinglists_table")
     
-    def __init__(self, user_id, mealplan_id):
+    def __init__(self, name, user_id, mealplan_id):
+        self.name = name
         self.user_id = user_id
         self.mealplan_id = mealplan_id
 
@@ -116,37 +125,31 @@ class Shoppingingredient(db.Model):
     name = db.Column(db.String, nullable=False, unique=False)
     amount = db.Column(db.String, nullable=False, unique=False)
     obtained = db.Column(db.Boolean, nullable=False, unique=False)
+    meal_name = db.Column(db.String, nullable=True, unique=False)
     shoppinglist_id = db.Column(db.Integer, db.ForeignKey("shoppinglist.id"), nullable=False)
     
-    def __init__(self, name, amount, shoppinglist_id):
+    def __init__(self, name, amount, meal_name, shoppinglist_id):
         self.name = name
         self.amount = amount
         self.obtained = False
+        self.meal_name = meal_name
         self.shoppinglist_id = shoppinglist_id
 
 # Marshmallow Schemas
 class ShoppingingredientSchema(ma.Schema):
     class Meta:
-        fields = ("id", "name", "amount", "obtained", "shoppinglist_id")
+        fields = ("id", "name", "amount", "obtained", "meal_name", "shoppinglist_id")
 
 shoppingingredient_schema = ShoppingingredientSchema()
 multiple_shoppingingredient_schema = ShoppingingredientSchema(many=True)
 
 class ShoppinglistSchema(ma.Schema):
     class Meta:
-        fields = ("id", "mealplan_id", "shoppingingredients")
+        fields = ("id", "name", "user_id", "mealplan_id", "shoppingingredients")
     shoppingingredients = ma.Nested(multiple_shoppingingredient_schema)
 
 shoppinglist_schema = ShoppinglistSchema()
 multiple_shoppinglist_schema = ShoppinglistSchema(many=True)
-
-class MealplanSchema(ma.Schema):
-    class Meta:
-        fields = ("id", "name", "user_id", "shoppinglist")
-    shoppinglist = base_fields.Function(lambda fields: shoppinglist_schema.dump(fields.shoppinglist[0] if len(fields.shoppinglist) > 0 else None))
-
-mealplan_schema = MealplanSchema()
-multiple_mealplan_schema = MealplanSchema(many=True)
 
 class IngredientSchema(ma.Schema):
     class Meta:
@@ -178,6 +181,15 @@ class MealSchema(ma.Schema):
 
 meal_schema = MealSchema()
 multiple_meal_schema = MealSchema(many=True)
+
+class MealplanSchema(ma.Schema):
+    class Meta:
+        fields = ("id", "name", "meals", "user_id", "shoppinglist")
+    meals = ma.Nested(multiple_meal_schema)
+    shoppinglist = base_fields.Function(lambda fields: shoppinglist_schema.dump(fields.shoppinglist[0] if len(fields.shoppinglist) > 0 else None))
+
+mealplan_schema = MealplanSchema()
+multiple_mealplan_schema = MealplanSchema(many=True)
 
 class UserSchema(ma.Schema):
     class Meta:
@@ -664,10 +676,16 @@ def add_mealplan():
     data = request.get_json()
     name = data.get("name")
     user_id = data.get("user_id")
+    meals = data.get("meals")
 
     record = Mealplan(name, user_id)
     db.session.add(record)
     db.session.commit()
+
+    for meal_id in meals:
+        meal = db.session.query(Meal).filter(Meal.id == meal_id).first()
+        record.meals.append(meal)
+        db.session.commit()
 
     return jsonify({
         "status": 200,
@@ -766,10 +784,11 @@ def add_shoppinglist():
         })
 
     data = request.get_json()
+    name = data.get("name")
     user_id = data.get("user_id")
     mealplan_id = data.get("mealplan_id")
 
-    record = Shoppinglist(user_id, mealplan_id)
+    record = Shoppinglist(name, user_id, mealplan_id)
     db.session.add(record)
     db.session.commit()
 
@@ -817,6 +836,30 @@ def get_shoppinglist_by_id(id):
     record = db.session.query(Shoppinglist).filter(Shoppinglist.id == id).first()
     return jsonify(shoppinglist_schema.dump(record))
 
+@app.route("/shoppinglist/update/<id>", methods=["PUT"])
+def update_shoppinglist(id):
+    if request.content_type != "application/json":
+        return jsonify({
+            "status": 400,
+            "message": "Error: Data must be sent as JSON.",
+            "data": {}
+        })
+
+    data = request.get_json()
+    name = data.get("name")
+
+    record = db.session.query(Shoppinglist).filter(Shoppinglist.id == id).first()
+    if name is not None:
+        record.name = name
+
+    db.session.commit()
+
+    return jsonify({
+        "status": 200,
+        "message": "Shoppinglist Updated",
+        "data": shoppinglist_schema.dump(record)
+    })
+
 @app.route("/shoppinglist/delete/<id>", methods=["DELETE"])
 def delete_shoppinglist(id):
     record = db.session.query(Shoppinglist).filter(Shoppinglist.id == id).first()
@@ -844,9 +887,10 @@ def add_shoppingingredient():
     data = request.get_json()
     name = data.get("name")
     amount = data.get("amount")
+    meal_name = data.get("meal_name")
     shoppinglist_id = data.get("shoppinglist_id")
 
-    record = Shoppingingredient(name, amount, shoppinglist_id)
+    record = Shoppingingredient(name, amount, meal_name, shoppinglist_id)
     db.session.add(record)
     db.session.commit()
 
@@ -870,9 +914,10 @@ def add_multiple_shoppingingredients():
     for data in data:
         name = data.get("name")
         amount = data.get("amount")
+        meal_name = data.get("meal_name")
         shoppinglist_id = data.get("shoppinglist_id")
 
-        record = Shoppingingredient(name, amount, shoppinglist_id)
+        record = Shoppingingredient(name, amount, meal_name, shoppinglist_id)
         db.session.add(record)
         db.session.commit()
 
@@ -907,6 +952,7 @@ def update_shoppingingredient(id):
     name = data.get("name")
     amount = data.get("amount")
     obtained = data.get("obtained")
+    meal_name = data.get("meal_name")
 
     record = db.session.query(Shoppingingredient).filter(Shoppingingredient.id == id).first()
     if name is not None:
@@ -915,6 +961,8 @@ def update_shoppingingredient(id):
         record.amount = amount
     if obtained is not None:
         record.obtained = obtained
+    if meal_name is not None:
+        record.meal_name = meal_name
 
     db.session.commit()
 
