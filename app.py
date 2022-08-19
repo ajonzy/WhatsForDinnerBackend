@@ -22,6 +22,11 @@ mealplans_table = db.Table('mealplans_table',
     db.Column('meal_id', db.Integer, db.ForeignKey('meal.id'))
 )
 
+shared_meals_table = db.Table('shared_meals_table',
+    db.Column('user_id', db.Integer, db.ForeignKey('user.id')),
+    db.Column('meal_id', db.Integer, db.ForeignKey('meal.id'))
+)
+
 shared_mealplans_table = db.Table('shared_mealplans_table',
     db.Column('user_id', db.Integer, db.ForeignKey('user.id')),
     db.Column('mealplan_id', db.Integer, db.ForeignKey('mealplan.id'))
@@ -56,6 +61,7 @@ class User(db.Model):
     meals = db.relationship("Meal", backref="user", cascade='all, delete, delete-orphan')
     mealplans = db.relationship("Mealplan", backref="user", cascade='all, delete, delete-orphan')
     shoppinglists = db.relationship("Shoppinglist", backref="user", cascade='all, delete, delete-orphan')
+    shared_meals = db.relationship("Meal", secondary="shared_meals_table")
     shared_mealplans = db.relationship("Mealplan", secondary="shared_mealplans_table")
     shared_shoppinglists = db.relationship("Shoppinglist", secondary="shared_shoppinglists_table")
     outgoing_friend_requests = db.relationship("User", secondary="outgoing_friend_requests_table", primaryjoin=id==outgoing_friend_requests_table.c.user_id, secondaryjoin=id==outgoing_friend_requests_table.c.friend_id)
@@ -75,6 +81,7 @@ class Meal(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     recipe = db.relationship("Recipe", backref="meal", cascade='all, delete, delete-orphan')
     mealplans = db.relationship("Mealplan", secondary="mealplans_table")
+    shared_users = db.relationship("User", secondary="shared_meals_table")
     
     def __init__(self, name, description, image_url, user_id):
         self.name = name
@@ -211,10 +218,11 @@ multiple_mealplan_schema = MealplanSchema(many=True)
 
 class UserSchema(ma.Schema):
     class Meta:
-        fields = ("id", "username", "email", "meals", "mealplans", "shoppinglists", "shared_mealplans", "shared_shoppinglists", "outgoing_friend_requests", "incoming_friend_requests", "friends")
+        fields = ("id", "username", "email", "meals", "mealplans", "shoppinglists", "shared_meals", "shared_mealplans", "shared_shoppinglists", "outgoing_friend_requests", "incoming_friend_requests", "friends")
     meals = ma.Nested(multiple_meal_schema)
     mealplans = ma.Nested(multiple_mealplan_schema)
     shoppinglists = ma.Nested(multiple_shoppinglist_schema)
+    shared_meals = ma.Nested(multiple_meal_schema)
     shared_mealplans = ma.Nested(multiple_mealplan_schema)
     shared_shoppinglists = ma.Nested(multiple_shoppinglist_schema)
     outgoing_friend_requests = base_fields.Function(lambda fields: list(map(lambda friend: { "user_id": friend.id, "username": friend.username }, fields.outgoing_friend_requests)))
@@ -548,6 +556,34 @@ def add_meal():
         "data": meal_schema.dump(record)
     })
 
+@app.route("/meal/share", methods=["POST"])
+def share_meal():
+    if request.content_type != "application/json":
+        return jsonify({
+            "status": 400,
+            "message": "Error: Data must be sent as JSON.",
+            "data": {}
+        })
+
+    data = request.get_json()
+    meal_id = data.get("meal_id")
+    user_id = data.get("user_id")
+
+    shared_user = db.session.query(User).filter(User.id == user_id).first()
+    shared_meal = db.session.query(Meal).filter(Meal.id == meal_id).first()
+
+    shared_user.shared_meals.append(shared_meal)
+    db.session.commit()
+
+    return jsonify({
+        "status": 200,
+        "message": "Meal Shared",
+        "data": {
+            "Meal": meal_schema.dump(shared_meal),
+            "User": user_schema.dump(shared_user)
+        }
+    })
+
 @app.route("/meal/get", methods=["GET"])
 def get_all_meals():
     records = db.session.query(Meal).all()
@@ -591,12 +627,38 @@ def update_meal(id):
 @app.route("/meal/delete/<id>", methods=["DELETE"])
 def delete_meal(id):
     record = db.session.query(Meal).filter(Meal.id == id).first()
+    for user in record.shared_users:
+        user.shared_meals.remove(record)
+        db.session.commit()
     db.session.delete(record)
     db.session.commit()
     return jsonify({
         "status": 200,
         "message": "Meal Deleted",
         "data": meal_schema.dump(record)
+    })
+
+@app.route("/meal/unshare/<id>/<user_id>", methods=["DELETE"])
+def unshare_meal(id, user_id):
+    record = db.session.query(Meal).filter(Meal.id == id).first()
+    shared_user = db.session.query(User).filter(User.id == user_id).first()
+
+    if shared_user.shared_meals.count(record) == 0:
+        return jsonify({
+                "status": 400,
+                "message": "Error: Shared meal does not exist.",
+                "data": {}
+            })
+
+    shared_user.shared_meals.remove(record)
+    db.session.commit()
+    return jsonify({
+        "status": 200,
+        "message": "Meal Share Deleted",
+        "data":{
+            "Meal": meal_schema.dump(record),
+            "User": user_schema.dump(shared_user)
+        }
     })
 
 
@@ -963,6 +1025,34 @@ def delete_mealplan(id):
         "data": mealplan_schema.dump(record)
     })
 
+@app.route("/mealplan/unshare/<id>/<user_id>", methods=["DELETE"])
+def unshare_mealplan(id, user_id):
+    record = db.session.query(Mealplan).filter(Mealplan.id == id).first()
+    shared_user = db.session.query(User).filter(User.id == user_id).first()
+
+    if shared_user.shared_mealplans.count(record) == 0:
+        return jsonify({
+                "status": 400,
+                "message": "Error: Shared mealplan does not exist.",
+                "data": {}
+            })
+
+    shared_user.shared_mealplans.remove(record)
+    db.session.commit()
+
+    if len(record.shoppinglist) > 0:
+        shared_user.shared_shoppinglists.remove(record.shoppinglist)
+        db.session.commit()
+        
+    return jsonify({
+        "status": 200,
+        "message": "Mealplan Share Deleted",
+        "data":{
+            "Meal": mealplan_schema.dump(record),
+            "User": user_schema.dump(shared_user)
+        }
+    })
+
 
 @app.route("/shoppinglist/add", methods=["POST"])
 def add_shoppinglist():
@@ -1068,6 +1158,29 @@ def delete_shoppinglist(id):
         "status": 200,
         "message": "Shoppinglist Deleted",
         "data": shoppinglist_schema.dump(record)
+    })
+
+@app.route("/shoppinglist/unshare/<id>/<user_id>", methods=["DELETE"])
+def unshare_shoppinglist(id, user_id):
+    record = db.session.query(Shoppinglist).filter(Shoppinglist.id == id).first()
+    shared_user = db.session.query(User).filter(User.id == user_id).first()
+
+    if shared_user.shared_shoppinglists.count(record) == 0:
+        return jsonify({
+                "status": 400,
+                "message": "Error: Shared shoppinglist does not exist.",
+                "data": {}
+            })
+
+    shared_user.shared_shoppinglists.remove(record)
+    db.session.commit()
+    return jsonify({
+        "status": 200,
+        "message": "Shoppinglist Share Deleted",
+        "data":{
+            "Meal": shoppinglist_schema.dump(record),
+            "User": user_schema.dump(shared_user)
+        }
     })
 
 
