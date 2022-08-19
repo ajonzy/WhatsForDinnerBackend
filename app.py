@@ -792,6 +792,12 @@ def add_shoppinglist():
     db.session.add(record)
     db.session.commit()
 
+    if mealplan_id is not None:
+        mealplan = db.session.query(Mealplan).filter(Mealplan.id == mealplan_id).first()
+        for user in mealplan.shared_users:
+            user.shared_shoppinglists.append(record)
+            db.session.commit()
+
     return jsonify({
         "status": 200,
         "message": "Shoppinglist Added",
