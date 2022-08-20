@@ -454,7 +454,7 @@ def get_user_by_token(token):
     return jsonify({
         "status": 200,
         "message": "User authenticated.",
-        "data": jsonify(user_schema.dump(record))
+        "data": user_schema.dump(record)
     })
 
 @app.route("/user/update/<id>", methods=["PUT"])
