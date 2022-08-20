@@ -451,7 +451,11 @@ def get_user_by_token(token):
         })
 
     record = db.session.query(User).filter(User.id == session.user_id).first()
-    return jsonify(user_schema.dump(record))
+    return jsonify({
+        "status": 200,
+        "message": "User authenticated.",
+        "data": jsonify(user_schema.dump(record))
+    })
 
 @app.route("/user/update/<id>", methods=["PUT"])
 def update_user(id):
