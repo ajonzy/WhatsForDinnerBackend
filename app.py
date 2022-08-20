@@ -101,6 +101,7 @@ class Meal(db.Model):
     name = db.Column(db.String, nullable=False, unique=False)
     description = db.Column(db.String, nullable=True, unique=False)
     image_url = db.Column(db.String, nullable=True, unique=False)
+    difficulty = db.Column(db.Integer, nullable=False, unique=False)
     sleep_until = db.Column(db.String, nullable=True, unique=False)
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     recipe = db.relationship("Recipe", backref="meal", cascade='all, delete, delete-orphan')
@@ -108,10 +109,11 @@ class Meal(db.Model):
     mealplans = db.relationship("Mealplan", secondary="mealplans_table")
     shared_users = db.relationship("User", secondary="shared_meals_table")
     
-    def __init__(self, name, description, image_url, sleep_until, user_id):
+    def __init__(self, name, description, image_url, difficulty, sleep_until, user_id):
         self.name = name
         self.description = description
         self.image_url = image_url
+        self.difficulty = difficulty
         self.sleep_until = None
         self.user_id = user_id
 
@@ -662,9 +664,10 @@ def add_meal():
     name = data.get("name")
     description = data.get("description")
     image_url = data.get("image_url")
+    difficulty = data.get("difficulty", 0)
     user_id = data.get("user_id")
 
-    record = Meal(name, description, image_url, user_id)
+    record = Meal(name, description, image_url, difficulty, user_id)
     db.session.add(record)
     db.session.commit()
 
@@ -724,6 +727,7 @@ def update_meal(id):
     data = request.get_json()
     name = data.get("name")
     description = data.get("description")
+    difficulty = data.get("difficulty")
     image_url = data.get("image_url")
     sleep_until = data.get("sleep_until")
 
@@ -734,6 +738,8 @@ def update_meal(id):
         record.description = description
     if image_url is not None:
         record.image_url = image_url
+    if difficulty is not None:
+        record.difficulty = difficulty
     if sleep_until is not None:
         record.sleep_until = sleep_until
 
