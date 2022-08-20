@@ -327,8 +327,8 @@ def add_user():
         "status": 200,
         "message": "User Added",
         "data": {
-            "User": user_schema.dump(record),
-            "Token": token
+            "user": user_schema.dump(record),
+            "token": token
         }
     })
 
@@ -375,8 +375,8 @@ def login_user():
         "status": 200,
         "message": "Valid username and password",
         "data": {
-            "User": user_schema.dump(record),
-            "Token": token
+            "user": user_schema.dump(record),
+            "token": token
         }
     })
 
@@ -419,8 +419,8 @@ def request_friend():
         "status": 200,
         "message": "Friend Request Added",
         "data": {
-            "User": user_schema.dump(user),
-            "Friend": user_schema.dump(friend)
+            "user": user_schema.dump(user),
+            "friend": user_schema.dump(friend)
         }
     })
 
@@ -552,8 +552,8 @@ def cancel_friend_request(id, friend_id):
         "status": 200,
         "message": "Friend Request Deleted",
         "data": {
-            "User": user_schema.dump(user),
-            "Friend": user_schema.dump(friend)
+            "user": user_schema.dump(user),
+            "friend": user_schema.dump(friend)
         }
     })
 
@@ -591,8 +591,8 @@ def accept_friend_request(id, friend_id):
         "status": 200,
         "message": "Friend Added",
         "data": {
-            "User": user_schema.dump(user),
-            "Friend": user_schema.dump(friend)
+            "user": user_schema.dump(user),
+            "friend": user_schema.dump(friend)
         }
     })
 
@@ -618,8 +618,8 @@ def reject_friend_request(id, friend_id):
         "status": 200,
         "message": "Friend Request Deleted",
         "data": {
-            "User": user_schema.dump(user),
-            "Friend": user_schema.dump(friend)
+            "user": user_schema.dump(user),
+            "friend": user_schema.dump(friend)
         }
     })
 
@@ -645,8 +645,8 @@ def delete_friend(id, friend_id):
         "status": 200,
         "message": "Friend Deleted",
         "data": {
-            "User": user_schema.dump(user),
-            "Friend": user_schema.dump(friend)
+            "user": user_schema.dump(user),
+            "friend": user_schema.dump(friend)
         }
     })
 
@@ -700,8 +700,8 @@ def share_meal():
         "status": 200,
         "message": "Meal Shared",
         "data": {
-            "Meal": meal_schema.dump(shared_meal),
-            "User": user_schema.dump(shared_user)
+            "meal": meal_schema.dump(shared_meal),
+            "user": user_schema.dump(shared_user)
         }
     })
 
@@ -783,8 +783,8 @@ def unshare_meal(id, user_id):
         "status": 200,
         "message": "Meal Share Deleted",
         "data":{
-            "Meal": meal_schema.dump(record),
-            "User": user_schema.dump(shared_user)
+            "meal": meal_schema.dump(record),
+            "user": user_schema.dump(shared_user)
         }
     })
 
@@ -861,8 +861,8 @@ def attach_category():
         "status": 200,
         "message": "Category Attached",
         "data": {
-            "Category": category_schema.dump(record),
-            "Meal": meal_schema.dump(meal)
+            "category": category_schema.dump(record),
+            "meal": meal_schema.dump(meal)
         }
     })
 
@@ -1223,8 +1223,8 @@ def share_mealplan():
         "status": 200,
         "message": "Mealplan Shared",
         "data": {
-            "Mealplan": mealplan_schema.dump(shared_mealplan),
-            "User": user_schema.dump(shared_user)
+            "mealplan": mealplan_schema.dump(shared_mealplan),
+            "user": user_schema.dump(shared_user)
         }
     })
 
@@ -1299,8 +1299,8 @@ def unshare_mealplan(id, user_id):
         "status": 200,
         "message": "Mealplan Share Deleted",
         "data":{
-            "Meal": mealplan_schema.dump(record),
-            "User": user_schema.dump(shared_user)
+            "meal": mealplan_schema.dump(record),
+            "user": user_schema.dump(shared_user)
         }
     })
 
@@ -1359,8 +1359,8 @@ def share_shoppinglist():
         "status": 200,
         "message": "Shoppinglist Shared",
         "data": {
-            "Shoppinglist": shoppinglist_schema.dump(shared_shoppinglist),
-            "User": user_schema.dump(shared_user)
+            "shoppinglist": shoppinglist_schema.dump(shared_shoppinglist),
+            "user": user_schema.dump(shared_user)
         }
     })
 
@@ -1430,8 +1430,8 @@ def unshare_shoppinglist(id, user_id):
         "status": 200,
         "message": "Shoppinglist Share Deleted",
         "data":{
-            "Meal": shoppinglist_schema.dump(record),
-            "User": user_schema.dump(shared_user)
+            "meal": shoppinglist_schema.dump(record),
+            "user": user_schema.dump(shared_user)
         }
     })
 
