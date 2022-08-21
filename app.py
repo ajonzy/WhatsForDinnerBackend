@@ -1230,10 +1230,19 @@ def add_mealplan():
     db.session.add(record)
     db.session.commit()
 
+    shoppinglist = Shoppinglist(f"{name} Mealplan", created_on, user_id, record.id)
+    db.session.add(shoppinglist)
+    db.session.commit()
+
     for meal_id in meals:
         meal = db.session.query(Meal).filter(Meal.id == meal_id).first()
         record.meals.append(meal)
         db.session.commit()
+
+        for ingredient in meal.recipe[0].ingredients:
+            shoppingingredient = Shoppingingredient(ingredient.name, ingredient.amount, ingredient.category, meal.name, shoppinglist.id, ingredient.id)
+            db.session.add(shoppingingredient)
+            db.session.commit()
 
     return jsonify({
         "status": 200,
@@ -1273,6 +1282,39 @@ def share_mealplan():
         }
     })
 
+@app.route("/mealplan/meal/add", methods=["POST"])
+def add_meal_to_mealplan():
+    if request.content_type != "application/json":
+        return jsonify({
+            "status": 400,
+            "message": "Error: Data must be sent as JSON.",
+            "data": {}
+        })
+
+    data = request.get_json()
+    mealplan_id = data.get("mealplan_id")
+    meal_id = data.get("meal_id")
+
+    record = db.session.query(Mealplan).filter(Mealplan.id == mealplan_id).first()
+    meal = db.session.query(Meal).filter(Meal.id == meal_id).first()
+    
+    record.meals.append(meal)
+    db.session.commit()
+
+    for ingredient in meal.recipe[0].ingredients:
+        shoppingingredient = Shoppingingredient(ingredient.name, ingredient.amount, ingredient.category, meal.name, record.shoppinglist[0].id, ingredient.id)
+        db.session.add(shoppingingredient)
+        db.session.commit()
+
+    return jsonify({
+        "status": 200,
+        "message": "Meal added to mealplan",
+        "data": {
+            "mealplan": mealplan_schema.dump(record),
+            "meal": meal_schema.dump(meal)
+        }
+    })
+
 @app.route("/mealplan/get", methods=["GET"])
 def get_all_mealplans():
     records = db.session.query(Mealplan).all()
@@ -1298,6 +1340,7 @@ def update_mealplan(id):
     record = db.session.query(Mealplan).filter(Mealplan.id == id).first()
     if name is not None:
         record.name = name
+        record.shoppinglist[0].name = f"{name} Mealplan"
 
     db.session.commit()
 
@@ -1346,6 +1389,40 @@ def unshare_mealplan(id, user_id):
         "data":{
             "meal": mealplan_schema.dump(record),
             "user": user_schema.dump(shared_user)
+        }
+    })
+
+@app.route("/mealplan/meal/delete", methods=["DELETE"])
+def delete_meal_from_mealplan():
+    if request.content_type != "application/json":
+        return jsonify({
+            "status": 400,
+            "message": "Error: Data must be sent as JSON.",
+            "data": {}
+        })
+
+    data = request.get_json()
+    mealplan_id = data.get("mealplan_id")
+    meal_id = data.get("meal_id")
+
+    record = db.session.query(Mealplan).filter(Mealplan.id == mealplan_id).first()
+    meal = db.session.query(Meal).filter(Meal.id == meal_id).first()
+    
+    record.meals.remove(meal)
+    db.session.commit()
+
+    for ingredient in meal.recipe[0].ingredients:
+        for shoppingingredient in ingredient.shoppingingredients:
+            if shoppingingredient.shoppinglist_id == record.shoppinglist[0].id:
+                db.session.delete(shoppingingredient)
+                db.session.commit()
+
+    return jsonify({
+        "status": 200,
+        "message": "Meal deleted from mealplan",
+        "data": {
+            "mealplan": mealplan_schema.dump(record),
+            "meal": meal_schema.dump(meal)
         }
     })
 
