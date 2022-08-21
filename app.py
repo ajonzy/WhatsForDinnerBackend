@@ -109,7 +109,7 @@ class Meal(db.Model):
     mealplans = db.relationship("Mealplan", secondary="mealplans_table")
     shared_users = db.relationship("User", secondary="shared_meals_table")
     
-    def __init__(self, name, description, image_url, difficulty, sleep_until, user_id):
+    def __init__(self, name, description, image_url, difficulty, user_id):
         self.name = name
         self.description = description
         self.image_url = image_url
@@ -151,11 +151,14 @@ class Ingredient(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String, nullable=False, unique=False)
     amount = db.Column(db.String, nullable=False, unique=False)
+    category = db.Column(db.String, nullable=True, unique=False)
     recipe_id = db.Column(db.Integer, db.ForeignKey("recipe.id"), nullable=False)
+    shoppingingredients = db.relationship("Shoppingingredient", backref="ingredient", cascade='all, delete, delete-orphan')
     
-    def __init__(self, name, amount, recipe_id):
+    def __init__(self, name, amount, category, recipe_id):
         self.name = name
         self.amount = amount
+        self.category = category
         self.recipe_id = recipe_id
 
 class Mealplan(db.Model):
@@ -191,21 +194,25 @@ class Shoppingingredient(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String, nullable=False, unique=False)
     amount = db.Column(db.String, nullable=False, unique=False)
+    category = db.Column(db.String, nullable=True, unique=False)
     obtained = db.Column(db.Boolean, nullable=False, unique=False)
     meal_name = db.Column(db.String, nullable=True, unique=False)
     shoppinglist_id = db.Column(db.Integer, db.ForeignKey("shoppinglist.id"), nullable=False)
+    ingredient_id = db.Column(db.Integer, db.ForeignKey("ingredient.id"), nullable=True)
     
-    def __init__(self, name, amount, meal_name, shoppinglist_id):
+    def __init__(self, name, amount, category, meal_name, shoppinglist_id, ingredient_id):
         self.name = name
         self.amount = amount
+        self.category = category
         self.obtained = False
         self.meal_name = meal_name
         self.shoppinglist_id = shoppinglist_id
+        self.ingredient_id = ingredient_id
 
 # Marshmallow Schemas
 class ShoppingingredientSchema(ma.Schema):
     class Meta:
-        fields = ("id", "name", "amount", "obtained", "meal_name", "shoppinglist_id")
+        fields = ("id", "name", "amount", "category", "obtained", "meal_name", "shoppinglist_id", "ingredient_id")
 
 shoppingingredient_schema = ShoppingingredientSchema()
 multiple_shoppingingredient_schema = ShoppingingredientSchema(many=True)
@@ -220,7 +227,8 @@ multiple_shoppinglist_schema = ShoppinglistSchema(many=True)
 
 class IngredientSchema(ma.Schema):
     class Meta:
-        fields = ("id", "name", "amount", "recipe_id")
+        fields = ("id", "name", "amount", "category", "recipe_id", "shoppingingredients")
+    shoppingingredients = ma.Nested(multiple_shoppingingredient_schema)
 
 ingredient_schema = IngredientSchema()
 multiple_ingredient_schema = IngredientSchema(many=True)
@@ -1081,11 +1089,19 @@ def add_ingredient():
     data = request.get_json()
     name = data.get("name")
     amount = data.get("amount")
+    category = data.get("category")
     recipe_id = data.get("recipe_id")
 
-    record = Ingredient(name, amount, recipe_id)
+    record = Ingredient(name, amount, category, recipe_id)
     db.session.add(record)
     db.session.commit()
+
+    meal = db.session.query(Meal).join(Recipe).filter(Recipe.id == record.recipe_id).first()
+    for mealplan in meal.mealplans:
+        if mealplan.shoppinglist is not None:
+            shoppingingredient = Shoppingingredient(name, amount, category, meal.name, mealplan.shoppinglist[0].id, record.id)
+            db.session.add(shoppingingredient)
+            db.session.commit()
 
     return jsonify({
         "status": 200,
@@ -1107,13 +1123,21 @@ def add_multiple_ingredients():
     for data in data:
         name = data.get("name")
         amount = data.get("amount")
+        category = data.get("category")
         recipe_id = data.get("recipe_id")
 
-        record = Ingredient(name, amount, recipe_id)
+        record = Ingredient(name, amount, category, recipe_id)
         db.session.add(record)
         db.session.commit()
 
         records.append(record)
+
+        meal = db.session.query(Meal).join(Recipe).filter(Recipe.id == record.recipe_id).first()
+        for mealplan in meal.mealplans:
+            if mealplan.shoppinglist is not None:
+                shoppingingredient = Shoppingingredient(name, amount, category, meal.name, mealplan.shoppinglist[0].id, record.id)
+                db.session.add(shoppingingredient)
+                db.session.commit()
 
     return jsonify({
         "status": 200,
@@ -1143,12 +1167,24 @@ def update_ingredient(id):
     data = request.get_json()
     name = data.get("name")
     amount = data.get("amount")
+    category = data.get("category")
 
     record = db.session.query(Ingredient).filter(Ingredient.id == id).first()
     if name is not None:
         record.name = name
+        for shoppingingredient in record.shoppingingredients:
+            shoppingingredient.name = name
+            db.session.commit()
     if amount is not None:
         record.amount = amount
+        for shoppingingredient in record.shoppingingredients:
+            shoppingingredient.amount = amount
+            db.session.commit()
+    if category is not None:
+        record.category = category
+        for shoppingingredient in record.shoppingingredients:
+            shoppingingredient.category = category
+            db.session.commit()
 
     db.session.commit()
 
@@ -1163,6 +1199,11 @@ def delete_ingredient(id):
     record = db.session.query(Ingredient).filter(Ingredient.id == id).first()
     db.session.delete(record)
     db.session.commit()
+
+    for shoppingingredient in record.shoppingingredients:
+        db.session.delete(shoppingingredient)
+        db.session.commit()
+
     return jsonify({
         "status": 200,
         "message": "Ingredient Deleted",
@@ -1452,10 +1493,12 @@ def add_shoppingingredient():
     data = request.get_json()
     name = data.get("name")
     amount = data.get("amount")
+    category = data.get("category")
     meal_name = data.get("meal_name")
     shoppinglist_id = data.get("shoppinglist_id")
+    ingredient_id = data.get("ingredient_id")
 
-    record = Shoppingingredient(name, amount, meal_name, shoppinglist_id)
+    record = Shoppingingredient(name, amount, category, meal_name, shoppinglist_id, ingredient_id)
     db.session.add(record)
     db.session.commit()
 
@@ -1479,10 +1522,12 @@ def add_multiple_shoppingingredients():
     for data in data:
         name = data.get("name")
         amount = data.get("amount")
+        category = data.get("category")
         meal_name = data.get("meal_name")
         shoppinglist_id = data.get("shoppinglist_id")
+        ingredient_id = data.get("ingredient_id")
 
-        record = Shoppingingredient(name, amount, meal_name, shoppinglist_id)
+        record = Shoppingingredient(name, amount, category, meal_name, shoppinglist_id, ingredient_id)
         db.session.add(record)
         db.session.commit()
 
@@ -1516,6 +1561,7 @@ def update_shoppingingredient(id):
     data = request.get_json()
     name = data.get("name")
     amount = data.get("amount")
+    category = data.get("category")
     obtained = data.get("obtained")
     meal_name = data.get("meal_name")
 
@@ -1524,6 +1570,8 @@ def update_shoppingingredient(id):
         record.name = name
     if amount is not None:
         record.amount = amount
+    if category is not None:
+        record.category = category
     if obtained is not None:
         record.obtained = obtained
     if meal_name is not None:
