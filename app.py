@@ -179,14 +179,16 @@ class Shoppinglist(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String, nullable=False, unique=False)
     created_on = db.Column(db.String, nullable=False, unique=False)
+    updates_hidden = db.Column(db.Boolean, nullable=False, unique=False)
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     mealplan_id = db.Column(db.Integer, db.ForeignKey("mealplan.id"), nullable=True)
     shoppingingredients = db.relationship("Shoppingingredient", backref="shoppinglist", cascade='all, delete, delete-orphan')
     shared_users = db.relationship("User", secondary="shared_shoppinglists_table")
     
-    def __init__(self, name, created_on, user_id, mealplan_id):
+    def __init__(self, name, created_on, updates_hidden, user_id, mealplan_id):
         self.name = name
         self.created_on = created_on
+        self.updates_hidden = updates_hidden
         self.user_id = user_id
         self.mealplan_id = mealplan_id
 
@@ -219,7 +221,7 @@ multiple_shoppingingredient_schema = ShoppingingredientSchema(many=True)
 
 class ShoppinglistSchema(ma.Schema):
     class Meta:
-        fields = ("id", "name", "created_on", "user_id", "mealplan_id", "shoppingingredients")
+        fields = ("id", "name", "created_on", "updates_hidden", "user_id", "mealplan_id", "shoppingingredients")
     shoppingingredients = ma.Nested(multiple_shoppingingredient_schema)
 
 shoppinglist_schema = ShoppinglistSchema()
@@ -681,6 +683,10 @@ def add_meal():
 
     record = Meal(name, description, image_url, difficulty, user_id)
     db.session.add(record)
+    db.session.commit()
+
+    recipe = Recipe(record.id)
+    db.session.add()
     db.session.commit()
 
     return jsonify({
@@ -1230,7 +1236,7 @@ def add_mealplan():
     db.session.add(record)
     db.session.commit()
 
-    shoppinglist = Shoppinglist(f"{name} Mealplan", created_on, user_id, record.id)
+    shoppinglist = Shoppinglist(f"{name} Mealplan", created_on, False, user_id, record.id)
     db.session.add(shoppinglist)
     db.session.commit()
 
@@ -1439,10 +1445,11 @@ def add_shoppinglist():
     data = request.get_json()
     name = data.get("name")
     created_on = data.get("created_on")
+    updates_hidden = data.get("updates_hidden")
     user_id = data.get("user_id")
     mealplan_id = data.get("mealplan_id")
 
-    record = Shoppinglist(name, created_on, user_id, mealplan_id)
+    record = Shoppinglist(name, created_on, updates_hidden, user_id, mealplan_id)
     db.session.add(record)
     db.session.commit()
 
@@ -1507,10 +1514,13 @@ def update_shoppinglist(id):
 
     data = request.get_json()
     name = data.get("name")
+    updates_hidden = data.get("updates_hidden")
 
     record = db.session.query(Shoppinglist).filter(Shoppinglist.id == id).first()
     if name is not None:
         record.name = name
+    if updates_hidden is not None:
+        record.updates_hidden = updates_hidden
 
     db.session.commit()
 
