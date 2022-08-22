@@ -103,18 +103,20 @@ class Meal(db.Model):
     image_url = db.Column(db.String, nullable=True, unique=False)
     difficulty = db.Column(db.Integer, nullable=False, unique=False)
     sleep_until = db.Column(db.String, nullable=True, unique=False)
+    user_username = db.Column(db.String, nullable=False, unique=False)
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     recipe = db.relationship("Recipe", backref="meal", cascade='all, delete, delete-orphan')
     categories = db.relationship("Category", secondary="categories_table")
     mealplans = db.relationship("Mealplan", secondary="mealplans_table")
     shared_users = db.relationship("User", secondary="shared_meals_table")
     
-    def __init__(self, name, description, image_url, difficulty, user_id):
+    def __init__(self, name, description, image_url, difficulty, user_username, user_id):
         self.name = name
         self.description = description
         self.image_url = image_url
         self.difficulty = difficulty
         self.sleep_until = None
+        self.user_username = user_username
         self.user_id = user_id
 
 class Category(db.Model):
@@ -260,7 +262,7 @@ multiple_category_schema = CategorySchema(many=True)
 
 class MealSchema(ma.Schema):
     class Meta:
-        fields = ("id", "name", "description", "image_url", "sleep_until", "categories", "user_id", "recipe")
+        fields = ("id", "name", "description", "image_url", "sleep_until", "categories", "user_username", "user_id", "recipe")
     categories = ma.Nested(multiple_category_schema)
     recipe = base_fields.Function(lambda fields: recipe_schema.dump(fields.recipe[0] if len(fields.recipe) > 0 else None))
 
@@ -681,7 +683,9 @@ def add_meal():
     difficulty = data.get("difficulty", 0)
     user_id = data.get("user_id")
 
-    record = Meal(name, description, image_url, difficulty, user_id)
+    user = db.session.get(User).filter(User.id == id).first()
+
+    record = Meal(name, description, image_url, difficulty, user.username, user_id)
     db.session.add(record)
     db.session.commit()
 
