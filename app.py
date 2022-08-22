@@ -262,7 +262,7 @@ multiple_category_schema = CategorySchema(many=True)
 
 class MealSchema(ma.Schema):
     class Meta:
-        fields = ("id", "name", "description", "image_url", "sleep_until", "categories", "user_username", "user_id", "recipe")
+        fields = ("id", "name", "description", "image_url", "difficulty", "sleep_until", "categories", "user_username", "user_id", "recipe")
     categories = ma.Nested(multiple_category_schema)
     recipe = base_fields.Function(lambda fields: recipe_schema.dump(fields.recipe[0] if len(fields.recipe) > 0 else None))
 
@@ -683,14 +683,14 @@ def add_meal():
     difficulty = data.get("difficulty", 0)
     user_id = data.get("user_id")
 
-    user = db.session.get(User).filter(User.id == id).first()
+    user = db.session.query(User).filter(User.id == user_id).first()
 
     record = Meal(name, description, image_url, difficulty, user.username, user_id)
     db.session.add(record)
     db.session.commit()
 
     recipe = Recipe(record.id)
-    db.session.add()
+    db.session.add(recipe)
     db.session.commit()
 
     return jsonify({
