@@ -888,6 +888,40 @@ def attach_category():
         }
     })
 
+@app.route("/category/attach/multiple", methods=["POST"])
+def attach_multiple_categories():
+    if request.content_type != "application/json":
+        return jsonify({
+            "status": 400,
+            "message": "Error: Data must be sent as JSON.",
+            "data": {}
+        })
+
+    data = request.get_json()
+
+    records = []
+    meals = []
+    for data in data:
+        category_id = data.get("category_id")
+        meal_id = data.get("meal_id")
+
+        record = db.session.query(Category).filter(Category.id == category_id).first()
+        meal = db.session.query(Meal).filter(Meal.id == meal_id).first()
+        meal.categories.append(record)
+        db.session.commit()
+
+        records.append(record)
+        meals.append(meal)
+
+    return jsonify({
+        "status": 200,
+        "message": "Category Attached",
+        "data": {
+            "categories": multiple_category_schema.dump(records),
+            "meals": multiple_meal_schema.dump(meals)
+        }
+    })
+
 @app.route("/category/get", methods=["GET"])
 def get_all_categories():
     records = db.session.query(Category).all()
