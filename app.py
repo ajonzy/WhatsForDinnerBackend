@@ -259,7 +259,7 @@ multiple_step_schema = StepSchema(many=True)
 
 class StepsectionSchema(ma.Schema):
     class Meta:
-        fields = ("id", "tile", "recipe_id", "steps")
+        fields = ("id", "title", "recipe_id", "steps")
     steps = ma.Nested(multiple_step_schema)
 
 stepsection_schema = StepsectionSchema()
