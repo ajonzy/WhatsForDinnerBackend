@@ -132,22 +132,35 @@ class Category(db.Model):
 class Recipe(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     meal_id = db.Column(db.Integer, db.ForeignKey("meal.id"), nullable=False)
+    stepsections = db.relationship("Stepsection", backref="recipe", cascade='all, delete, delete-orphan')
     steps = db.relationship("Step", backref="recipe", cascade='all, delete, delete-orphan')
     ingredients = db.relationship("Ingredient", backref="recipe", cascade='all, delete, delete-orphan')
     
     def __init__(self, meal_id):
         self.meal_id = meal_id
 
+class Stepsection(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String, nullable=False, unique=False)
+    recipe_id = db.Column(db.Integer, db.ForeignKey("recipe.id"), nullable=False)
+    steps = db.relationship("Step", backref="stepsection", cascade='all, delete, delete-orphan')
+    
+    def __init__(self, title, recipe_id):
+        self.title = title
+        self.recipe_id = recipe_id
+
 class Step(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     number = db.Column(db.Integer, nullable=False, unique=False)
     text = db.Column(db.String, nullable=False, unique=False)
     recipe_id = db.Column(db.Integer, db.ForeignKey("recipe.id"), nullable=False)
+    stepsection_id = db.Column(db.Integer, db.ForeignKey("stepsection.id"), nullable=True)
     
-    def __init__(self, number, text, recipe_id):
+    def __init__(self, number, text, recipe_id, stepsection_id):
         self.number = number
         self.text = text
         self.recipe_id = recipe_id
+        self.stepsection_id = stepsection_id
 
 class Ingredient(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -239,14 +252,23 @@ multiple_ingredient_schema = IngredientSchema(many=True)
 
 class StepSchema(ma.Schema):
     class Meta:
-        fields = ("id", "number", "text", "recipe_id")
+        fields = ("id", "number", "text", "recipe_id", "stepsection_id")
 
 step_schema = StepSchema()
 multiple_step_schema = StepSchema(many=True)
 
+class StepsectionSchema(ma.Schema):
+    class Meta:
+        fields = ("id", "tile", "recipe_id", "steps")
+    steps = ma.Nested(multiple_step_schema)
+
+stepsection_schema = StepsectionSchema()
+multiple_stepsection_schema = StepsectionSchema(many=True)
+
 class RecipeSchema(ma.Schema):
     class Meta:
-        fields = ("id", "meal_id", "steps", "ingredients")
+        fields = ("id", "meal_id", "stepsections", "steps", "ingredients")
+    stepsections = ma.Nested(multiple_stepsection_schema)
     steps = ma.Nested(multiple_step_schema)
     ingredients = ma.Nested(multiple_ingredient_schema)
 
@@ -901,7 +923,9 @@ def attach_multiple_categories():
 
     records = []
     meals = []
+    print(data)
     for data in data:
+        print(data)
         category_id = data.get("category_id")
         meal_id = data.get("meal_id")
 
@@ -1020,6 +1044,102 @@ def delete_recipe(id):
     })
 
 
+@app.route("/stepsection/add", methods=["POST"])
+def add_stepsection():
+    if request.content_type != "application/json":
+        return jsonify({
+            "status": 400,
+            "message": "Error: Data must be sent as JSON.",
+            "data": {}
+        })
+
+    data = request.get_json()
+    title = data.get("title")
+    recipe_id = data.get("recipe_id")
+
+    record = Stepsection(title, recipe_id)
+    db.session.add(record)
+    db.session.commit()
+
+    return jsonify({
+        "status": 200,
+        "message": "Stepsection Added",
+        "data": stepsection_schema.dump(record)
+    })
+
+@app.route("/stepsection/add/multiple", methods=["POST"])
+def add_multiple_stepsections():
+    if request.content_type != "application/json":
+        return jsonify({
+            "status": 400,
+            "message": "Error: Data must be sent as JSON.",
+            "data": {}
+        })
+
+    data = request.get_json()
+    records = []
+    for data in data:
+        title = data.get("title")
+        recipe_id = data.get("recipe_id")
+
+        record = Stepsection(title, recipe_id)
+        db.session.add(record)
+        db.session.commit()
+
+        records.append(record)
+
+    return jsonify({
+        "status": 200,
+        "message": "Stepsections Added",
+        "data": multiple_stepsection_schema.dump(records)
+    })
+
+@app.route("/stepsection/get", methods=["GET"])
+def get_all_stepsections():
+    records = db.session.query(Stepsection).all()
+    return jsonify(multiple_stepsection_schema.dump(records))
+
+@app.route("/stepsection/get/<id>", methods=["GET"])
+def get_stepsection_by_id(id):
+    record = db.session.query(Stepsection).filter(Stepsection.id == id).first()
+    return jsonify(stepsection_schema.dump(record))
+
+@app.route("/stepsection/update/<id>", methods=["PUT"])
+def update_stepsection(id):
+    if request.content_type != "application/json":
+        return jsonify({
+            "status": 400,
+            "message": "Error: Data must be sent as JSON.",
+            "data": {}
+        })
+
+    data = request.get_json()
+    title = data.get("title")
+
+    record = db.session.query(Stepsection).filter(Step.id == id).first()
+    if title is not None:
+        record.title = title
+
+    db.session.commit()
+
+    return jsonify({
+        "status": 200,
+        "message": "Stepsection Updated",
+        "data": stepsection_schema.dump(record)
+    })
+
+@app.route("/stepsection/delete/<id>", methods=["DELETE"])
+def delete_stepsection(id):
+    record = db.session.query(Stepsection).filter(Stepsection.id == id).first()
+    db.session.delete(record)
+    db.session.commit()
+    return jsonify({
+        "status": 200,
+        "message": "Stepsection Deleted",
+        "data": stepsection_schema.dump(record)
+    })
+
+
 @app.route("/step/add", methods=["POST"])
 def add_step():
     if request.content_type != "application/json":
@@ -1033,8 +1153,9 @@ def add_step():
     number = data.get("number")
     text = data.get("text")
     recipe_id = data.get("recipe_id")
+    stepsection_id = data.get("stepsection_id")
 
-    record = Step(number, text, recipe_id)
+    record = Step(number, text, recipe_id, stepsection_id)
     db.session.add(record)
     db.session.commit()
 
@@ -1059,8 +1180,9 @@ def add_multiple_steps():
         number = data.get("number")
         text = data.get("text")
         recipe_id = data.get("recipe_id")
+        stepsection_id = data.get("stepsection_id")
 
-        record = Step(number, text, recipe_id)
+        record = Step(number, text, recipe_id, stepsection_id)
         db.session.add(record)
         db.session.commit()
 
