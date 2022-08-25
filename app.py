@@ -180,14 +180,16 @@ class Mealplan(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String, nullable=False, unique=False)
     created_on = db.Column(db.String, nullable=False, unique=False)
+    user_username = db.Column(db.String, nullable=False, unique=False)
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     meals = db.relationship("Meal", secondary="mealplans_table")
     shoppinglist = db.relationship("Shoppinglist", backref="mealplan", cascade='all, delete, delete-orphan')
     shared_users = db.relationship("User", secondary="shared_mealplans_table")
     
-    def __init__(self, name, created_on, user_id):
+    def __init__(self, name, created_on, user_username, user_id):
         self.name = name
         self.created_on = created_on
+        self.user_username = user_username
         self.user_id = user_id
 
 class Shoppinglist(db.Model):
@@ -293,7 +295,7 @@ multiple_meal_schema = MealSchema(many=True)
 
 class MealplanSchema(ma.Schema):
     class Meta:
-        fields = ("id", "name", "created_on", "meals", "user_id", "shoppinglist")
+        fields = ("id", "name", "created_on", "meals", "user_username", "user_id", "shoppinglist")
     meals = ma.Nested(multiple_meal_schema)
     shoppinglist = base_fields.Function(lambda fields: shoppinglist_schema.dump(fields.shoppinglist[0] if len(fields.shoppinglist) > 0 else None))
 
@@ -1389,10 +1391,11 @@ def add_mealplan():
     data = request.get_json()
     name = data.get("name")
     created_on = data.get("created_on")
+    user_username = data.get("user_username")
     user_id = data.get("user_id")
     meals = data.get("meals")
 
-    record = Mealplan(name, created_on, user_id)
+    record = Mealplan(name, created_on, user_username, user_id)
     db.session.add(record)
     db.session.commit()
 
