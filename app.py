@@ -427,11 +427,17 @@ def request_friend():
 
     data = request.get_json()
     user_id = data.get("user_id")
-    friend_id = data.get("friend_id")
+    friend_username = data.get("friend_username")
 
     user = db.session.query(User).filter(User.id == user_id).first()
-    friend = db.session.query(User).filter(User.id == friend_id).first()
+    friend = db.session.query(User).filter(User.username == friend_username).first()
 
+    if friendData is None:
+        return jsonify({
+            "status": 400,
+            "message": "User doesn't exist.",
+            "data": {}
+        })
     if user.friends.count(friend) > 0:
         return jsonify({
             "status": 400,
