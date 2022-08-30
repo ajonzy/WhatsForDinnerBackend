@@ -432,7 +432,7 @@ def request_friend():
     user = db.session.query(User).filter(User.id == user_id).first()
     friend = db.session.query(User).filter(User.username == friend_username).first()
 
-    if friendData is None:
+    if friend is None:
         return jsonify({
             "status": 400,
             "message": "User doesn't exist.",
