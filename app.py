@@ -941,9 +941,7 @@ def attach_multiple_categories():
 
     records = []
     meals = []
-    print(data)
     for data in data:
-        print(data)
         category_id = data.get("category_id")
         meal_id = data.get("meal_id")
 
@@ -996,6 +994,67 @@ def update_category(id):
         "status": 200,
         "message": "Category Updated",
         "data": category_schema.dump(record)
+    })
+
+@app.route("/category/unattach", methods=["DELETE"])
+def unattach_category():
+    if request.content_type != "application/json":
+        return jsonify({
+            "status": 400,
+            "message": "Error: Data must be sent as JSON.",
+            "data": {}
+        })
+
+    data = request.get_json()
+    category_id = data.get("category_id")
+    meal_id = data.get("meal_id")
+
+    record = db.session.query(Category).filter(Category.id == category_id).first()
+    meal = db.session.query(Meal).filter(Meal.id == meal_id).first()
+    meal.categories.remove(record)
+    db.session.commit()
+
+    return jsonify({
+        "status": 200,
+        "message": "Category Unattached",
+        "data": {
+            "category": category_schema.dump(record),
+            "meal": meal_schema.dump(meal)
+        }
+    })
+
+@app.route("/category/unattach/multiple", methods=["DELETE"])
+def unattach_multiple_categories():
+    if request.content_type != "application/json":
+        return jsonify({
+            "status": 400,
+            "message": "Error: Data must be sent as JSON.",
+            "data": {}
+        })
+
+    data = request.get_json()
+
+    records = []
+    meals = []
+    for data in data:
+        category_id = data.get("category_id")
+        meal_id = data.get("meal_id")
+
+        record = db.session.query(Category).filter(Category.id == category_id).first()
+        meal = db.session.query(Meal).filter(Meal.id == meal_id).first()
+        meal.categories.remove(record)
+        db.session.commit()
+
+        records.append(record)
+        meals.append(meal)
+
+    return jsonify({
+        "status": 200,
+        "message": "Category Unattached",
+        "data": {
+            "categories": multiple_category_schema.dump(records),
+            "meals": multiple_meal_schema.dump(meals)
+        }
     })
 
 @app.route("/category/delete/<id>", methods=["DELETE"])
