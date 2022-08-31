@@ -742,9 +742,9 @@ def share_meal():
 
     data = request.get_json()
     meal_id = data.get("meal_id")
-    user_id = data.get("user_id")
+    username = data.get("username")
 
-    shared_user = db.session.query(User).filter(User.id == user_id).first()
+    shared_user = db.session.query(User).filter(User.username == username).first()
     shared_meal = db.session.query(Meal).filter(Meal.id == meal_id).first()
 
     shared_user.shared_meals.append(shared_meal)
@@ -1438,9 +1438,9 @@ def share_mealplan():
 
     data = request.get_json()
     mealplan_id = data.get("mealplan_id")
-    user_id = data.get("user_id")
+    username = data.get("username")
 
-    shared_user = db.session.query(User).filter(User.id == user_id).first()
+    shared_user = db.session.query(User).filter(User.username == username).first()
     shared_mealplan = db.session.query(Mealplan).filter(Mealplan.id == mealplan_id).first()
 
     shared_user.shared_mealplans.append(shared_mealplan)
@@ -1648,9 +1648,9 @@ def share_shoppinglist():
 
     data = request.get_json()
     shoppinglist_id = data.get("shoppinglist_id")
-    user_id = data.get("user_id")
+    username = data.get("username")
 
-    shared_user = db.session.query(User).filter(User.id == user_id).first()
+    shared_user = db.session.query(User).filter(User.username == username).first()
     shared_shoppinglist = db.session.query(Shoppinglist).filter(Shoppinglist.id == shoppinglist_id).first()
 
     shared_user.shared_shoppinglists.append(shared_shoppinglist)
