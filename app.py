@@ -745,6 +745,14 @@ def share_meal():
     username = data.get("username")
 
     shared_user = db.session.query(User).filter(User.username == username).first()
+
+    if shared_user is None:
+        return jsonify({
+            "status": 400,
+            "message": "User doesn't exist.",
+            "data": {}
+        })
+
     shared_meal = db.session.query(Meal).filter(Meal.id == meal_id).first()
 
     shared_user.shared_meals.append(shared_meal)
@@ -1441,6 +1449,14 @@ def share_mealplan():
     username = data.get("username")
 
     shared_user = db.session.query(User).filter(User.username == username).first()
+
+    if shared_user is None:
+        return jsonify({
+            "status": 400,
+            "message": "User doesn't exist.",
+            "data": {}
+        })
+
     shared_mealplan = db.session.query(Mealplan).filter(Mealplan.id == mealplan_id).first()
 
     shared_user.shared_mealplans.append(shared_mealplan)
@@ -1651,6 +1667,14 @@ def share_shoppinglist():
     username = data.get("username")
 
     shared_user = db.session.query(User).filter(User.username == username).first()
+
+    if shared_user is None:
+        return jsonify({
+            "status": 400,
+            "message": "User doesn't exist.",
+            "data": {}
+        })
+        
     shared_shoppinglist = db.session.query(Shoppinglist).filter(Shoppinglist.id == shoppinglist_id).first()
 
     shared_user.shared_shoppinglists.append(shared_shoppinglist)
