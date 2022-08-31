@@ -1573,7 +1573,7 @@ def unshare_mealplan(id, user_id):
     db.session.commit()
 
     if len(record.shoppinglist) > 0:
-        shared_user.shared_shoppinglists.remove(record.shoppinglist)
+        shared_user.shared_shoppinglists.remove(record.shoppinglist[0])
         db.session.commit()
 
     return jsonify({
