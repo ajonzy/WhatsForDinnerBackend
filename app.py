@@ -1580,7 +1580,7 @@ def unshare_mealplan(id, user_id):
         "status": 200,
         "message": "Mealplan Share Deleted",
         "data":{
-            "meal": mealplan_schema.dump(record),
+            "mealplan": mealplan_schema.dump(record),
             "user": user_schema.dump(shared_user)
         }
     })
