@@ -1674,7 +1674,7 @@ def share_shoppinglist():
             "message": "User doesn't exist.",
             "data": {}
         })
-        
+
     shared_shoppinglist = db.session.query(Shoppinglist).filter(Shoppinglist.id == shoppinglist_id).first()
 
     shared_user.shared_shoppinglists.append(shared_shoppinglist)
@@ -1758,7 +1758,7 @@ def unshare_shoppinglist(id, user_id):
         "status": 200,
         "message": "Shoppinglist Share Deleted",
         "data":{
-            "meal": shoppinglist_schema.dump(record),
+            "shoppinglist": shoppinglist_schema.dump(record),
             "user": user_schema.dump(shared_user)
         }
     })
