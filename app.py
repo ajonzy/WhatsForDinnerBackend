@@ -790,7 +790,7 @@ def update_meal(id):
     name = data.get("name")
     description = data.get("description")
     difficulty = data.get("difficulty")
-    image_url = data.get("image_url")
+    image_url = data.get("image_url", -1)
     sleep_until = data.get("sleep_until")
 
     record = db.session.query(Meal).filter(Meal.id == id).first()
@@ -798,7 +798,7 @@ def update_meal(id):
         record.name = name
     if description is not None:
         record.description = description
-    if image_url is not None:
+    if image_url != -1:
         record.image_url = image_url
     if difficulty is not None:
         record.difficulty = difficulty
