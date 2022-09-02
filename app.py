@@ -16,12 +16,12 @@ load_dotenv()
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get("SECRET_KEY")
 app.config["SQLALCHEMY_DATABASE_URI"] = "postgresql://" + os.environ.get("DATABASE_URL").partition("://")[2]
+socketio = SocketIO(app, cors_allowed_origins="*")
 app.wsgi_app = ProxyFix(app.wsgi_app)
 
 db = SQLAlchemy(app)
 ma = Marshmallow(app)
 bcrypt = Bcrypt(app)
-socketio = SocketIO(app, cors_allowed_origins="*")
 CORS(app)
 
 # SQLAlchemy Tables
