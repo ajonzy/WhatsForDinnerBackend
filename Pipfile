@@ -15,7 +15,6 @@ psycopg2 = "*"
 python-dotenv = "*"
 werkzeug = "*"
 flask-socketio = "*"
-gevent = "*"
 
 [dev-packages]
 
