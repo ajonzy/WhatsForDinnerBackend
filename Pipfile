@@ -10,12 +10,12 @@ flask-marshmallow = "*"
 marshmallow-sqlalchemy = "*"
 flask-bcrypt = "*"
 flask-cors = "*"
-gunicorn = "==20.1.0"
+gunicorn = "*"
 psycopg2 = "*"
 python-dotenv = "*"
 werkzeug = "*"
 flask-socketio = "*"
-eventlet = "*"
+gevent = "*"
 
 [dev-packages]
 
