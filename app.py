@@ -1348,6 +1348,7 @@ def add_ingredient():
             shoppingingredient = Shoppingingredient(name, amount, category, meal.name, mealplan.shoppinglist[0].id, record.id)
             db.session.add(shoppingingredient)
             db.session.commit()
+            socketio.emit("shoppingingredient-update", shoppingingredient_schema.dump(shoppingingredient))
 
     return jsonify({
         "status": 200,
@@ -1384,6 +1385,7 @@ def add_multiple_ingredients():
                 shoppingingredient = Shoppingingredient(name, amount, category, meal.name, mealplan.shoppinglist[0].id, record.id)
                 db.session.add(shoppingingredient)
                 db.session.commit()
+                socketio.emit("shoppingingredient-update", shoppingingredient_schema.dump(shoppingingredient))
 
     return jsonify({
         "status": 200,
@@ -1432,6 +1434,9 @@ def update_ingredient(id):
             shoppingingredient.category = category
             db.session.commit()
 
+    for shoppingingredient in record.shoppingingredients:
+        socketio.emit("shoppingingredient-update", shoppingingredient_schema.dump(shoppingingredient))
+
     db.session.commit()
 
     return jsonify({
@@ -1449,6 +1454,7 @@ def delete_ingredient(id):
     for shoppingingredient in record.shoppingingredients:
         db.session.delete(shoppingingredient)
         db.session.commit()
+        socketio.emit("shoppingingredient-update", shoppingingredient_schema.dump(shoppingingredient))
 
     return jsonify({
         "status": 200,
@@ -1560,6 +1566,7 @@ def add_meal_to_mealplan():
         shoppingingredient = Shoppingingredient(ingredient.name, ingredient.amount, ingredient.category, meal.name, record.shoppinglist[0].id, ingredient.id)
         db.session.add(shoppingingredient)
         db.session.commit()
+        socketio.emit("shoppingingredient-update", shoppingingredient_schema.dump(shoppingingredient))
 
     return jsonify({
         "status": 200,
@@ -1671,6 +1678,7 @@ def delete_meal_from_mealplan():
             if shoppingingredient.shoppinglist_id == record.shoppinglist[0].id:
                 db.session.delete(shoppingingredient)
                 db.session.commit()
+                socketio.emit("shoppingingredient-update", shoppingingredient_schema.dump(shoppingingredient))
 
     return jsonify({
         "status": 200,
@@ -1847,6 +1855,8 @@ def add_shoppingingredient():
     db.session.add(record)
     db.session.commit()
 
+    socketio.emit("shoppingingredient-update", shoppingingredient_schema.dump(record))
+
     return jsonify({
         "status": 200,
         "message": "Shoppingingredient Added",
@@ -1877,6 +1887,8 @@ def add_multiple_shoppingingredients():
         db.session.commit()
 
         records.append(record)
+
+    socketio.emit("shoppingingredient-update-multiple", multiple_shoppingingredient_schema.dump(record))
 
     return jsonify({
         "status": 200,
@@ -1924,7 +1936,10 @@ def update_shoppingingredient(id):
 
     db.session.commit()
     
-    socketio.emit("shoppingingredient updated", shoppingingredient_schema.dump(record))
+    if obtained is not None:
+        socketio.emit("shared-shoppingingredient-update", shoppingingredient_schema.dump(record))
+    else:
+        socketio.emit("shoppingingredient-update", shoppingingredient_schema.dump(record))
 
     return jsonify({
         "status": 200,
@@ -1937,6 +1952,9 @@ def delete_shoppingingredient(id):
     record = db.session.query(Shoppingingredient).filter(Shoppingingredient.id == id).first()
     db.session.delete(record)
     db.session.commit()
+
+    socketio.emit("shoppingingredient-update", shoppingingredient_schema.dump(record))
+
     return jsonify({
         "status": 200,
         "message": "Shoppingingredient Deleted",
