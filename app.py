@@ -1888,7 +1888,7 @@ def add_multiple_shoppingingredients():
 
         records.append(record)
 
-    socketio.emit("shoppingingredient-update-multiple", multiple_shoppingingredient_schema.dump(record))
+    socketio.emit("shoppingingredient-update-multiple", multiple_shoppingingredient_schema.dump(records))
 
     return jsonify({
         "status": 200,
