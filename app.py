@@ -893,14 +893,6 @@ def unshare_meal(id, user_id):
     shared_user.shared_meals.remove(record)
     db.session.commit()
 
-    socketio.emit("meal-share-update", {
-        "data": {
-            "meal": meal_schema.dump(record),
-            "user": user_schema.dump(shared_user)
-        },
-        "type": "delete"
-    })
-
     return jsonify({
         "status": 200,
         "message": "Meal Share Deleted",
@@ -1725,14 +1717,6 @@ def unshare_mealplan(id, user_id):
         shared_user.shared_shoppinglists.remove(record.shoppinglist[0])
         db.session.commit()
 
-    socketio.emit("mealplan-share-update", {
-        "data": {
-            "mealplan": mealplan_schema.dump(record),
-            "user": user_schema.dump(shared_user)
-        },
-        "type": "delete"
-    })
-
     return jsonify({
         "status": 200,
         "message": "Mealplan Share Deleted",
@@ -1923,14 +1907,6 @@ def unshare_shoppinglist(id, user_id):
 
     shared_user.shared_shoppinglists.remove(record)
     db.session.commit()
-
-    socketio.emit("shoppinglist-share-update", {
-        "data": {
-            "shoppinglist": shoppinglist_schema.dump(shared_shoppinglist),
-            "user": user_schema.dump(shared_user)
-        },
-        "type": "delete"
-    })
 
     return jsonify({
         "status": 200,
