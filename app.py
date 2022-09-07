@@ -463,7 +463,10 @@ def request_friend():
     db.session.commit()
 
     socketio.emit("friend-request-update", {
-        "data": user_schema.dump(user),
+        "data": {
+            "user": user_schema.dump(user),
+            "friend": user_schema.dump(friend)
+        },
         "type": "add"
     })
 
