@@ -462,6 +462,11 @@ def request_friend():
     friend.incoming_friend_requests.append(user)
     db.session.commit()
 
+    socketio.emit("friend-request-update", {
+        "data": user_schema.dump(user),
+        "type": "add"
+    })
+
     return jsonify({
         "status": 200,
         "message": "Friend Request Added",
@@ -599,6 +604,14 @@ def cancel_friend_request(id, friend_id):
     friend.incoming_friend_requests.remove(user)
     db.session.commit()
 
+    socketio.emit("friend-request-update", {
+        "data": {
+            "user": user_schema.dump(user),
+            "friend": user_schema.dump(friend)
+        },
+        "type": "delete"
+    })
+
     return jsonify({
         "status": 200,
         "message": "Friend Request Deleted",
@@ -638,6 +651,14 @@ def accept_friend_request(id, friend_id):
         friend.incoming_friend_requests.remove(user)
         db.session.commit()
 
+    socketio.emit("friend-update", {
+        "data": {
+            "user": user_schema.dump(user),
+            "friend": user_schema.dump(friend)
+        },
+        "type": "add"
+    })
+
     return jsonify({
         "status": 200,
         "message": "Friend Added",
@@ -665,6 +686,14 @@ def reject_friend_request(id, friend_id):
     friend.outgoing_friend_requests.remove(user)
     db.session.commit()
 
+    socketio.emit("shared-friend-request-update", {
+        "data": {
+            "user": user_schema.dump(user),
+            "friend": user_schema.dump(friend)
+        },
+        "type": "delete"
+    })
+
     return jsonify({
         "status": 200,
         "message": "Friend Request Deleted",
@@ -691,6 +720,14 @@ def delete_friend(id, friend_id):
 
     friend.friends.remove(user)
     db.session.commit()
+
+    socketio.emit("friend-update", {
+        "data": {
+            "user": user_schema.dump(user),
+            "friend": user_schema.dump(friend)
+        },
+        "type": "delete"
+    })
 
     return jsonify({
         "status": 200,
@@ -760,6 +797,14 @@ def share_meal():
 
     shared_user.shared_meals.append(shared_meal)
     db.session.commit()
+
+    socketio.emit("meal-share-update", {
+        "data": {
+            "meal": meal_schema.dump(shared_meal),
+            "user": user_schema.dump(shared_user)
+        },
+        "type": "add"
+    })
 
     return jsonify({
         "status": 200,
@@ -844,6 +889,15 @@ def unshare_meal(id, user_id):
 
     shared_user.shared_meals.remove(record)
     db.session.commit()
+
+    socketio.emit("meal-share-update", {
+        "data": {
+            "meal": meal_schema.dump(record),
+            "user": user_schema.dump(shared_user)
+        },
+        "type": "delete"
+    })
+
     return jsonify({
         "status": 200,
         "message": "Meal Share Deleted",
@@ -1546,6 +1600,14 @@ def share_mealplan():
         shared_user.shared_shoppinglists.append(shared_mealplan.shoppinglist[0])
         db.session.commit()
 
+    socketio.emit("mealplan-share-update", {
+        "data": {
+            "mealplan": mealplan_schema.dump(shared_mealplan),
+            "user": user_schema.dump(shared_user)
+        },
+        "type": "add"
+    })
+
     return jsonify({
         "status": 200,
         "message": "Mealplan Shared",
@@ -1660,6 +1722,14 @@ def unshare_mealplan(id, user_id):
         shared_user.shared_shoppinglists.remove(record.shoppinglist[0])
         db.session.commit()
 
+    socketio.emit("mealplan-share-update", {
+        "data": {
+            "mealplan": mealplan_schema.dump(record),
+            "user": user_schema.dump(shared_user)
+        },
+        "type": "delete"
+    })
+
     return jsonify({
         "status": 200,
         "message": "Mealplan Share Deleted",
@@ -1768,6 +1838,14 @@ def share_shoppinglist():
     shared_user.shared_shoppinglists.append(shared_shoppinglist)
     db.session.commit()
 
+    socketio.emit("shoppinglist-share-update", {
+        "data": {
+            "shoppinglist": shoppinglist_schema.dump(shared_shoppinglist),
+            "user": user_schema.dump(shared_user)
+        },
+        "type": "add"
+    })
+
     return jsonify({
         "status": 200,
         "message": "Shoppinglist Shared",
@@ -1842,6 +1920,15 @@ def unshare_shoppinglist(id, user_id):
 
     shared_user.shared_shoppinglists.remove(record)
     db.session.commit()
+
+    socketio.emit("shoppinglist-share-update", {
+        "data": {
+            "shoppinglist": shoppinglist_schema.dump(shared_shoppinglist),
+            "user": user_schema.dump(shared_user)
+        },
+        "type": "delete"
+    })
+
     return jsonify({
         "status": 200,
         "message": "Shoppinglist Share Deleted",
