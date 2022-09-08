@@ -1952,7 +1952,7 @@ def share_shoppinglist():
     shared_user.shared_shoppinglists.append(shared_shoppinglist)
     db.session.commit()
 
-    notification = Notification("shoppinglist", share_shoppinglist.user_username, shared_shoppinglist.name, shared_user.id)
+    notification = Notification("shoppinglist", shared_shoppinglist.user_username, shared_shoppinglist.name, shared_user.id)
     db.session.add(notification)
     db.session.commit()
 
