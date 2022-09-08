@@ -690,8 +690,8 @@ def accept_friend_request(id, friend_id):
         db.session.commit()
 
     removed_notification = db.session.query(Notification).filter(Notification.category == "friendrequest").filter(Notification.username == user.username).filter(Notification.user_id == friend.id).first()
-    if notification is not None:
-        db.session.delete(notification)
+    if removed_notification is not None:
+        db.session.delete(removed_notification)
         db.session.commit()
 
     notification = Notification("friend", user.username, None, friend.id)
