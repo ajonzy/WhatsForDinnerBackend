@@ -841,7 +841,7 @@ def delete_notification(id):
     })
 
 @app.route("/notification/delete/all/<user_id>", methods=["DELETE"])
-def delete_notification(user_id):
+def delete_all_notifications(user_id):
     user = db.session.query(User).filter(User.id == user_id).first()
     records = []
     for notification in user.notifications:
