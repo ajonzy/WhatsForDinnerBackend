@@ -645,7 +645,7 @@ def cancel_friend_request(id, friend_id):
         "data": {
             "user": user_schema.dump(user),
             "friend": user_schema.dump(friend),
-            "removed_notification": notification_schema.dump(notification)
+            "notification": notification_schema.dump(notification)
         },
         "type": "delete"
     })
@@ -701,7 +701,9 @@ def accept_friend_request(id, friend_id):
     socketio.emit("friend-update", {
         "data": {
             "user": user_schema.dump(user),
-            "friend": user_schema.dump(friend)
+            "friend": user_schema.dump(friend),
+            "removed_notification": notification_schema.dump(removed_notification),
+            "notification": notification_schema.dump(notification)
         },
         "type": "add"
     })
@@ -711,9 +713,7 @@ def accept_friend_request(id, friend_id):
         "message": "Friend Added",
         "data": {
             "user": user_schema.dump(user),
-            "friend": user_schema.dump(friend),
-            "removed_notification": notification_schema.dump(removed_notification),
-            "notification": notification_schema.dump(notification)
+            "friend": user_schema.dump(friend)
         }
     })
 
