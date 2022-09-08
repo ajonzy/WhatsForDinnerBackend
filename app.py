@@ -76,6 +76,7 @@ class User(db.Model):
     categories = db.relationship("Category", backref="user", cascade='all, delete, delete-orphan')
     mealplans = db.relationship("Mealplan", backref="user", cascade='all, delete, delete-orphan')
     shoppinglists = db.relationship("Shoppinglist", backref="user", cascade='all, delete, delete-orphan')
+    notifications = db.relationship("Notification", backref="user", cascade='all, delete, delete-orphan')
     shared_meals = db.relationship("Meal", secondary="shared_meals_table")
     shared_mealplans = db.relationship("Mealplan", secondary="shared_mealplans_table")
     shared_shoppinglists = db.relationship("Shoppinglist", secondary="shared_shoppinglists_table")
@@ -98,6 +99,21 @@ class Session(db.Model):
         self.token = token
         self.ip = ip
         self.user_id = user_id
+
+class Notification(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    category = db.Column(db.String, nullable=False, unique=False)
+    username = db.Column(db.String, nullable=True, unique=False)
+    name = db.Column(db.String, nullable=True, unique=False)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    
+    def __init__(self, category, username, name, user_id):
+        self.category = category
+        self.username = username
+        self.name = name
+        self.user_id = user_id
+
+# TODO: Settings: default shoppinglist sort, toggle notifications, allow nonfriend sharing
 
 class Meal(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -307,13 +323,21 @@ class MealplanSchema(ma.Schema):
 mealplan_schema = MealplanSchema()
 multiple_mealplan_schema = MealplanSchema(many=True)
 
+class NotificationSchema(ma.Schema):
+    class Meta:
+        fields = ("id", "category", "username", "name", "user_id")
+
+notification_schema = NotificationSchema()
+multiple_notification_schema = NotificationSchema(many=True)
+
 class UserSchema(ma.Schema):
     class Meta:
-        fields = ("id", "username", "email", "meals", "categories", "mealplans", "shoppinglists", "shared_meals", "shared_mealplans", "shared_shoppinglists", "outgoing_friend_requests", "incoming_friend_requests", "friends")
+        fields = ("id", "username", "email", "meals", "categories", "mealplans", "shoppinglists", "notifications", "shared_meals", "shared_mealplans", "shared_shoppinglists", "outgoing_friend_requests", "incoming_friend_requests", "friends")
     meals = ma.Nested(multiple_meal_schema)
     categories = ma.Nested(multiple_category_schema)
     mealplans = ma.Nested(multiple_mealplan_schema)
     shoppinglists = ma.Nested(multiple_shoppinglist_schema)
+    notifications = ma.Nested(multiple_notification_schema)
     shared_meals = ma.Nested(multiple_meal_schema)
     shared_mealplans = ma.Nested(multiple_mealplan_schema)
     shared_shoppinglists = ma.Nested(multiple_shoppinglist_schema)
@@ -462,10 +486,15 @@ def request_friend():
     friend.incoming_friend_requests.append(user)
     db.session.commit()
 
+    notification = Notification("friendrequest", user.username, None, friend.id)
+    db.session.add(notification)
+    db.session.commit()
+
     socketio.emit("friend-request-update", {
         "data": {
             "user": user_schema.dump(user),
-            "friend": user_schema.dump(friend)
+            "friend": user_schema.dump(friend),
+            "notification": notification_schema.dump(notification)
         },
         "type": "add"
     })
@@ -607,10 +636,16 @@ def cancel_friend_request(id, friend_id):
     friend.incoming_friend_requests.remove(user)
     db.session.commit()
 
+    notification = db.session.query(Notification).filter(Notification.category == "friendrequest").filter(Notification.username == user.username).filter(Notification.user_id == friend.id).first()
+    if notification is not None:
+        db.session.delete(notification)
+        db.session.commit()
+
     socketio.emit("friend-request-update", {
         "data": {
             "user": user_schema.dump(user),
-            "friend": user_schema.dump(friend)
+            "friend": user_schema.dump(friend),
+            "removed_notification": notification_schema.dump(notification)
         },
         "type": "delete"
     })
@@ -654,6 +689,15 @@ def accept_friend_request(id, friend_id):
         friend.incoming_friend_requests.remove(user)
         db.session.commit()
 
+    removed_notification = db.session.query(Notification).filter(Notification.category == "friendrequest").filter(Notification.username == user.username).filter(Notification.user_id == friend.id).first()
+    if notification is not None:
+        db.session.delete(notification)
+        db.session.commit()
+
+    notification = Notification("friend", user.username, None, friend.id)
+    db.session.add(notification)
+    db.session.commit()
+
     socketio.emit("friend-update", {
         "data": {
             "user": user_schema.dump(user),
@@ -667,7 +711,9 @@ def accept_friend_request(id, friend_id):
         "message": "Friend Added",
         "data": {
             "user": user_schema.dump(user),
-            "friend": user_schema.dump(friend)
+            "friend": user_schema.dump(friend),
+            "removed_notification": notification_schema.dump(removed_notification),
+            "notification": notification_schema.dump(notification)
         }
     })
 
@@ -724,10 +770,16 @@ def delete_friend(id, friend_id):
     friend.friends.remove(user)
     db.session.commit()
 
+    notification = db.session.query(Notification).filter(Notification.category == "friend").filter(Notification.username == user.username).filter(Notification.user_id == friend.id).first()
+    if notification is not None:
+        db.session.delete(notification)
+        db.session.commit()
+
     socketio.emit("friend-update", {
         "data": {
             "user": user_schema.dump(user),
-            "friend": user_schema.dump(friend)
+            "friend": user_schema.dump(friend),
+            "notification": notification_schema.dump(notification)
         },
         "type": "delete"
     })
@@ -738,6 +790,71 @@ def delete_friend(id, friend_id):
         "data": {
             "user": user_schema.dump(user),
             "friend": user_schema.dump(friend)
+        }
+    })
+
+
+@app.route("/notification/add", methods=["POST"])
+def add_notification():
+    if request.content_type != "application/json":
+        return jsonify({
+            "status": 400,
+            "message": "Error: Data must be sent as JSON.",
+            "data": {}
+        })
+
+    data = request.get_json()
+    category = data.get("category")
+    username = data.get("username")
+    name = data.get("name")
+    user_id = data.get("user_id")
+
+    record = Notification(category, username, name, user_id)
+    db.session.add(record)
+    db.session.commit()
+
+    return jsonify({
+        "status": 200,
+        "message": "Notification Added",
+        "data": notification_schema.dump(record)
+    })
+
+@app.route("/notification/get", methods=["GET"])
+def get_all_notifications():
+    records = db.session.query(Notification).all()
+    return jsonify(multiple_notification_schema.dump(records))
+
+@app.route("/notification/get/<id>", methods=["GET"])
+def get_notification_by_id(id):
+    record = db.session.query(Notification).filter(Notification.id == id).first()
+    return jsonify(notification_schema.dump(record))
+
+@app.route("/notification/delete/single/<id>", methods=["DELETE"])
+def delete_notification(id):
+    record = db.session.query(Notification).filter(Notification.id == id).first()
+    db.session.delete(record)
+    db.session.commit()
+    return jsonify({
+        "status": 200,
+        "message": "Notification Deleted",
+        "data": notification_schema.dump(record)
+    })
+
+@app.route("/notification/delete/all/<user_id>", methods=["DELETE"])
+def delete_notification(user_id):
+    user = db.session.query(User).filter(User.id == user_id).first()
+    records = []
+    for notification in user.notifications:
+        record = db.session.query(Notification).filter(Notification.id == notification.id).first()
+        db.session.delete(record)
+        db.session.commit()
+        records.append(record)
+    return jsonify({
+        "status": 200,
+        "message": "Notifications Deleted",
+        "data": {
+            "user": user_schema.dump(user),
+            "notifications": multiple_notification_schema.dump(records)
         }
     })
 
@@ -801,10 +918,15 @@ def share_meal():
     shared_user.shared_meals.append(shared_meal)
     db.session.commit()
 
+    notification = Notification("meal", shared_meal.user_username, shared_meal.name, shared_user.id)
+    db.session.add(notification)
+    db.session.commit()
+
     socketio.emit("meal-share-update", {
         "data": {
             "meal": meal_schema.dump(shared_meal),
-            "user": user_schema.dump(shared_user)
+            "user": user_schema.dump(shared_user),
+            "notification": notification_schema.dump(notification)
         },
         "type": "add"
     })
@@ -1595,10 +1717,15 @@ def share_mealplan():
         shared_user.shared_shoppinglists.append(shared_mealplan.shoppinglist[0])
         db.session.commit()
 
+    notification = Notification("mealplan", shared_mealplan.user_username, shared_mealplan.name, shared_user.id)
+    db.session.add(notification)
+    db.session.commit()
+
     socketio.emit("mealplan-share-update", {
         "data": {
             "mealplan": mealplan_schema.dump(shared_mealplan),
-            "user": user_schema.dump(shared_user)
+            "user": user_schema.dump(shared_user),
+            "notification": notification_schema.dump(notification)
         },
         "type": "add"
     })
@@ -1825,10 +1952,15 @@ def share_shoppinglist():
     shared_user.shared_shoppinglists.append(shared_shoppinglist)
     db.session.commit()
 
+    notification = Notification("shoppinglist", share_shoppinglist.user_username, shared_shoppinglist.name, shared_user.id)
+    db.session.add(notification)
+    db.session.commit()
+
     socketio.emit("shoppinglist-share-update", {
         "data": {
             "shoppinglist": shoppinglist_schema.dump(shared_shoppinglist),
-            "user": user_schema.dump(shared_user)
+            "user": user_schema.dump(shared_user),
+            "notification": notification_schema.dump(notification)
         },
         "type": "add"
     })
