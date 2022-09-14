@@ -75,6 +75,7 @@ class User(db.Model):
     meals = db.relationship("Meal", backref="user", cascade='all, delete, delete-orphan')
     categories = db.relationship("Category", backref="user", cascade='all, delete, delete-orphan')
     mealplans = db.relationship("Mealplan", backref="user", cascade='all, delete, delete-orphan')
+    mealplanschemas = db.relationship("Mealplanschema", backref="user", cascade='all, delete, delete-orphan')
     shoppinglists = db.relationship("Shoppinglist", backref="user", cascade='all, delete, delete-orphan')
     notifications = db.relationship("Notification", backref="user", cascade='all, delete, delete-orphan')
     shared_meals = db.relationship("Meal", secondary="shared_meals_table")
@@ -113,7 +114,7 @@ class Notification(db.Model):
         self.name = name
         self.user_id = user_id
 
-# TODO: Settings: default shoppinglist sort, toggle notifications, allow nonfriend sharing
+# TODO: Settings: default shoppinglist sort, toggle notifications, allow nonfriend sharing, default mealplan schema, logout all
 
 class Meal(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -202,6 +203,7 @@ class Mealplan(db.Model):
     user_username = db.Column(db.String, nullable=False, unique=False)
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     meals = db.relationship("Meal", secondary="mealplans_table")
+    rules = db.relationship("Rule", backref="mealplan", cascade='all, delete, delete-orphan')
     shoppinglist = db.relationship("Shoppinglist", backref="mealplan", cascade='all, delete, delete-orphan')
     shared_users = db.relationship("User", secondary="shared_mealplans_table")
     
@@ -210,6 +212,35 @@ class Mealplan(db.Model):
         self.created_on = created_on
         self.user_username = user_username
         self.user_id = user_id
+
+class Mealplanschema(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String, nullable=False, unique=False)
+    number = db.Column(db.String, nullable=False, unique=False)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    rules = db.relationship("Rule", backref="mealplanschema", cascade='all, delete, delete-orphan')
+    
+    def __init__(self, name, number, user_id):
+        self.name = name
+        self.number = number
+        self.user_id = user_id
+
+class Rule(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    rule_type = db.Column(db.String, nullable=False, unique=False)
+    rule = db.Column(db.String, nullable=False, unique=False)
+    amount = db.Column(db.Integer, nullable=False, unique=False)
+    value = db.Column(db.String, nullable=False, unique=False)
+    mealplan_id = db.Column(db.Integer, db.ForeignKey("mealplan.id"), nullable=True)
+    mealplanschema_id = db.Column(db.Integer, db.ForeignKey("mealplanschema.id"), nullable=True)
+    
+    def __init__(self, rule_type, rule, amount, value, mealplan_id, mealplanschema_id):
+        self.type = rule_type
+        self.rule = rule
+        self.amount = amount
+        self.value = value
+        self.mealplan_id = mealplan_id
+        self.mealplanschema_id = mealplanschema_id
 
 class Shoppinglist(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -265,6 +296,21 @@ class ShoppinglistSchema(ma.Schema):
 shoppinglist_schema = ShoppinglistSchema()
 multiple_shoppinglist_schema = ShoppinglistSchema(many=True)
 
+class RuleSchema(ma.Schema):
+    class Meta:
+        fields = ("id", "rule_type", "rule", "amount", "value", "mealplan_id", "mealplanschema_id")
+
+rule_schema = RuleSchema()
+multiple_rule_schema = RuleSchema(many=True)
+
+class MealplanschemaSchema(ma.Schema):
+    class Meta:
+        fields = ("id", "name", "number", "user_id", "rules")
+    rules = ma.Nested(multiple_rule_schema)
+
+mealplanschema_schema = MealplanschemaSchema()
+multiple_mealplanschema_schema = MealplanschemaSchema(many=True)
+
 class IngredientSchema(ma.Schema):
     class Meta:
         fields = ("id", "name", "amount", "category", "recipe_id", "shoppingingredients")
@@ -316,8 +362,9 @@ multiple_meal_schema = MealSchema(many=True)
 
 class MealplanSchema(ma.Schema):
     class Meta:
-        fields = ("id", "name", "created_on", "meals", "user_username", "user_id", "shoppinglist")
+        fields = ("id", "name", "created_on", "meals", "rules", "user_username", "user_id", "shoppinglist")
     meals = ma.Nested(multiple_meal_schema)
+    rules = ma.Nested(multiple_rule_schema)
     shoppinglist = base_fields.Function(lambda fields: shoppinglist_schema.dump(fields.shoppinglist[0] if len(fields.shoppinglist) > 0 else None))
 
 mealplan_schema = MealplanSchema()
@@ -332,10 +379,11 @@ multiple_notification_schema = NotificationSchema(many=True)
 
 class UserSchema(ma.Schema):
     class Meta:
-        fields = ("id", "username", "email", "meals", "categories", "mealplans", "shoppinglists", "notifications", "shared_meals", "shared_mealplans", "shared_shoppinglists", "outgoing_friend_requests", "incoming_friend_requests", "friends")
+        fields = ("id", "username", "email", "meals", "categories", "mealplans", "mealplanschemas", "shoppinglists", "notifications", "shared_meals", "shared_mealplans", "shared_shoppinglists", "outgoing_friend_requests", "incoming_friend_requests", "friends")
     meals = ma.Nested(multiple_meal_schema)
     categories = ma.Nested(multiple_category_schema)
     mealplans = ma.Nested(multiple_mealplan_schema)
+    mealplanschemas = ma.Nested(multiple_mealplan_schema)
     shoppinglists = ma.Nested(multiple_shoppinglist_schema)
     notifications = ma.Nested(multiple_notification_schema)
     shared_meals = ma.Nested(multiple_meal_schema)
@@ -1889,6 +1937,161 @@ def delete_meal_from_mealplan():
             "mealplan": mealplan_schema.dump(record),
             "meal": meal_schema.dump(meal)
         }
+    })
+
+
+@app.route("/mealplanschema/add", methods=["POST"])
+def add_mealplanschema():
+    if request.content_type != "application/json":
+        return jsonify({
+            "status": 400,
+            "message": "Error: Data must be sent as JSON.",
+            "data": {}
+        })
+
+    data = request.get_json()
+    name = data.get("name")
+    number = data.get("number")
+    user_id = data.get("user_id")
+
+    record = Mealplanschema(name, number, user_id)
+    db.session.add(record)
+    db.session.commit()
+
+    return jsonify({
+        "status": 200,
+        "message": "Mealplanschema Added",
+        "data": mealplanschema_schema.dump(record)
+    })
+
+@app.route("/mealplanschema/get", methods=["GET"])
+def get_all_mealplanschemas():
+    records = db.session.query(Mealplanschema).all()
+    return jsonify(multiple_shoppinglist_schema.dump(records))
+
+@app.route("/mealplanschema/get/<id>", methods=["GET"])
+def get_mealplanschema_by_id(id):
+    record = db.session.query(Mealplanschema).filter(Mealplanschema.id == id).first()
+    return jsonify(mealplanschema_schema.dump(record))
+
+@app.route("/mealplanschema/update/<id>", methods=["PUT"])
+def update_mealplanschema(id):
+    if request.content_type != "application/json":
+        return jsonify({
+            "status": 400,
+            "message": "Error: Data must be sent as JSON.",
+            "data": {}
+        })
+
+    data = request.get_json()
+    name = data.get("name")
+    number = data.get("number")
+
+    record = db.session.query(Mealplanschema).filter(Mealplanschema.id == id).first()
+    if name is not None:
+        record.name = name
+    if number is not None:
+        record.number = number
+
+    db.session.commit()
+
+    return jsonify({
+        "status": 200,
+        "message": "Mealplanschema Updated",
+        "data": mealplanschema_schema.dump(record)
+    })
+
+@app.route("/mealplanschema/delete/<id>", methods=["DELETE"])
+def delete_mealplanschema(id):
+    record = db.session.query(Mealplanschema).filter(Mealplanschema.id == id).first()
+    db.session.delete(record)
+    db.session.commit()
+    return jsonify({
+        "status": 200,
+        "message": "Mealplanschema Deleted",
+        "data": mealplanschema_schema.dump(record)
+    })
+
+
+@app.route("/rule/add", methods=["POST"])
+def add_rule():
+    if request.content_type != "application/json":
+        return jsonify({
+            "status": 400,
+            "message": "Error: Data must be sent as JSON.",
+            "data": {}
+        })
+
+    data = request.get_json()
+    rule_type = data.get("rule_type")
+    rule = data.get("rule")
+    amount = data.get("amount")
+    value = data.get("value")
+    meaplan_id = data.get("meaplan_id")
+    mealplanschema_id = data.get("mealplanschema_id")
+
+    record = Mealplanschema(rule_type, rule, amount, value, meaplan_id, mealplanschema_id)
+    db.session.add(record)
+    db.session.commit()
+
+    return jsonify({
+        "status": 200,
+        "message": "Rule Added",
+        "data": rule_schema.dump(record)
+    })
+
+@app.route("/rule/get", methods=["GET"])
+def get_all_rules():
+    records = db.session.query(Rule).all()
+    return jsonify(multiple_rule_schema.dump(records))
+
+@app.route("/rule/get/<id>", methods=["GET"])
+def get_rule_by_id(id):
+    record = db.session.query(Rule).filter(Rule.id == id).first()
+    return jsonify(rule_schema.dump(record))
+
+@app.route("/rule/update/<id>", methods=["PUT"])
+def update_rule(id):
+    if request.content_type != "application/json":
+        return jsonify({
+            "status": 400,
+            "message": "Error: Data must be sent as JSON.",
+            "data": {}
+        })
+
+    data = request.get_json()
+    rule_type = data.get("rule_type")
+    rule = data.get("rule")
+    amount = data.get("amount")
+    value = data.get("value")
+
+    record = db.session.query(Rule).filter(Rule.id == id).first()
+    if rule_type is not None:
+        record.rule_type = rule_type
+    if rule is not None:
+        record.number = rule
+    if amount is not None:
+        record.amount = amount
+    if value is not None:
+        record.value = value
+
+    db.session.commit()
+
+    return jsonify({
+        "status": 200,
+        "message": "Rule Updated",
+        "data": rule_schema.dump(record)
+    })
+
+@app.route("/rule/delete/<id>", methods=["DELETE"])
+def delete_rule(id):
+    record = db.session.query(Rule).filter(Rule.id == id).first()
+    db.session.delete(record)
+    db.session.commit()
+    return jsonify({
+        "status": 200,
+        "message": "Rule Deleted",
+        "data": rule_schema.dump(record)
     })
 
 
