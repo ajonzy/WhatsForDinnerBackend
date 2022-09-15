@@ -383,7 +383,7 @@ class UserSchema(ma.Schema):
     meals = ma.Nested(multiple_meal_schema)
     categories = ma.Nested(multiple_category_schema)
     mealplans = ma.Nested(multiple_mealplan_schema)
-    mealplanoutlines = ma.Nested(multiple_mealplan_schema)
+    mealplanoutlines = ma.Nested(multiple_mealplanoutline_schema)
     shoppinglists = ma.Nested(multiple_shoppinglist_schema)
     notifications = ma.Nested(multiple_notification_schema)
     shared_meals = ma.Nested(multiple_meal_schema)
