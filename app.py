@@ -75,7 +75,7 @@ class User(db.Model):
     meals = db.relationship("Meal", backref="user", cascade='all, delete, delete-orphan')
     categories = db.relationship("Category", backref="user", cascade='all, delete, delete-orphan')
     mealplans = db.relationship("Mealplan", backref="user", cascade='all, delete, delete-orphan')
-    mealplanschemas = db.relationship("Mealplanschema", backref="user", cascade='all, delete, delete-orphan')
+    mealplanoutlines = db.relationship("Mealplanoutline", backref="user", cascade='all, delete, delete-orphan')
     shoppinglists = db.relationship("Shoppinglist", backref="user", cascade='all, delete, delete-orphan')
     notifications = db.relationship("Notification", backref="user", cascade='all, delete, delete-orphan')
     shared_meals = db.relationship("Meal", secondary="shared_meals_table")
@@ -213,12 +213,12 @@ class Mealplan(db.Model):
         self.user_username = user_username
         self.user_id = user_id
 
-class Mealplanschema(db.Model):
+class Mealplanoutline(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String, nullable=False, unique=False)
     number = db.Column(db.String, nullable=False, unique=False)
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
-    rules = db.relationship("Rule", backref="mealplanschema", cascade='all, delete, delete-orphan')
+    rules = db.relationship("Rule", backref="mealplanoutline", cascade='all, delete, delete-orphan')
     
     def __init__(self, name, number, user_id):
         self.name = name
@@ -232,15 +232,15 @@ class Rule(db.Model):
     amount = db.Column(db.Integer, nullable=False, unique=False)
     value = db.Column(db.String, nullable=False, unique=False)
     mealplan_id = db.Column(db.Integer, db.ForeignKey("mealplan.id"), nullable=True)
-    mealplanschema_id = db.Column(db.Integer, db.ForeignKey("mealplanschema.id"), nullable=True)
+    mealplanoutline_id = db.Column(db.Integer, db.ForeignKey("mealplanoutline.id"), nullable=True)
     
-    def __init__(self, rule_type, rule, amount, value, mealplan_id, mealplanschema_id):
+    def __init__(self, rule_type, rule, amount, value, mealplan_id, mealplanoutline_id):
         self.type = rule_type
         self.rule = rule
         self.amount = amount
         self.value = value
         self.mealplan_id = mealplan_id
-        self.mealplanschema_id = mealplanschema_id
+        self.mealplanoutline_id = mealplanoutline_id
 
 class Shoppinglist(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -298,18 +298,18 @@ multiple_shoppinglist_schema = ShoppinglistSchema(many=True)
 
 class RuleSchema(ma.Schema):
     class Meta:
-        fields = ("id", "rule_type", "rule", "amount", "value", "mealplan_id", "mealplanschema_id")
+        fields = ("id", "rule_type", "rule", "amount", "value", "mealplan_id", "mealplanoutline_id")
 
 rule_schema = RuleSchema()
 multiple_rule_schema = RuleSchema(many=True)
 
-class MealplanschemaSchema(ma.Schema):
+class MealplanoutlineSchema(ma.Schema):
     class Meta:
         fields = ("id", "name", "number", "user_id", "rules")
     rules = ma.Nested(multiple_rule_schema)
 
-mealplanschema_schema = MealplanschemaSchema()
-multiple_mealplanschema_schema = MealplanschemaSchema(many=True)
+mealplanoutline_schema = MealplanoutlineSchema()
+multiple_mealplanoutline_schema = MealplanoutlineSchema(many=True)
 
 class IngredientSchema(ma.Schema):
     class Meta:
@@ -379,11 +379,11 @@ multiple_notification_schema = NotificationSchema(many=True)
 
 class UserSchema(ma.Schema):
     class Meta:
-        fields = ("id", "username", "email", "meals", "categories", "mealplans", "mealplanschemas", "shoppinglists", "notifications", "shared_meals", "shared_mealplans", "shared_shoppinglists", "outgoing_friend_requests", "incoming_friend_requests", "friends")
+        fields = ("id", "username", "email", "meals", "categories", "mealplans", "mealplanoutlines", "shoppinglists", "notifications", "shared_meals", "shared_mealplans", "shared_shoppinglists", "outgoing_friend_requests", "incoming_friend_requests", "friends")
     meals = ma.Nested(multiple_meal_schema)
     categories = ma.Nested(multiple_category_schema)
     mealplans = ma.Nested(multiple_mealplan_schema)
-    mealplanschemas = ma.Nested(multiple_mealplan_schema)
+    mealplanoutlines = ma.Nested(multiple_mealplan_schema)
     shoppinglists = ma.Nested(multiple_shoppinglist_schema)
     notifications = ma.Nested(multiple_notification_schema)
     shared_meals = ma.Nested(multiple_meal_schema)
@@ -1940,8 +1940,8 @@ def delete_meal_from_mealplan():
     })
 
 
-@app.route("/mealplanschema/add", methods=["POST"])
-def add_mealplanschema():
+@app.route("/mealplanoutline/add", methods=["POST"])
+def add_mealplanoutline():
     if request.content_type != "application/json":
         return jsonify({
             "status": 400,
@@ -1954,28 +1954,28 @@ def add_mealplanschema():
     number = data.get("number")
     user_id = data.get("user_id")
 
-    record = Mealplanschema(name, number, user_id)
+    record = Mealplanoutline(name, number, user_id)
     db.session.add(record)
     db.session.commit()
 
     return jsonify({
         "status": 200,
-        "message": "Mealplanschema Added",
-        "data": mealplanschema_schema.dump(record)
+        "message": "Mealplanoutline Added",
+        "data": mealplanoutline_schema.dump(record)
     })
 
-@app.route("/mealplanschema/get", methods=["GET"])
-def get_all_mealplanschemas():
-    records = db.session.query(Mealplanschema).all()
+@app.route("/mealplanoutline/get", methods=["GET"])
+def get_all_mealplanoutlines():
+    records = db.session.query(Mealplanoutline).all()
     return jsonify(multiple_shoppinglist_schema.dump(records))
 
-@app.route("/mealplanschema/get/<id>", methods=["GET"])
-def get_mealplanschema_by_id(id):
-    record = db.session.query(Mealplanschema).filter(Mealplanschema.id == id).first()
-    return jsonify(mealplanschema_schema.dump(record))
+@app.route("/mealplanoutline/get/<id>", methods=["GET"])
+def get_mealplanoutline_by_id(id):
+    record = db.session.query(Mealplanoutline).filter(Mealplanoutline.id == id).first()
+    return jsonify(mealplanoutline_schema.dump(record))
 
-@app.route("/mealplanschema/update/<id>", methods=["PUT"])
-def update_mealplanschema(id):
+@app.route("/mealplanoutline/update/<id>", methods=["PUT"])
+def update_mealplanoutline(id):
     if request.content_type != "application/json":
         return jsonify({
             "status": 400,
@@ -1987,7 +1987,7 @@ def update_mealplanschema(id):
     name = data.get("name")
     number = data.get("number")
 
-    record = db.session.query(Mealplanschema).filter(Mealplanschema.id == id).first()
+    record = db.session.query(Mealplanoutline).filter(Mealplanoutline.id == id).first()
     if name is not None:
         record.name = name
     if number is not None:
@@ -1997,19 +1997,19 @@ def update_mealplanschema(id):
 
     return jsonify({
         "status": 200,
-        "message": "Mealplanschema Updated",
-        "data": mealplanschema_schema.dump(record)
+        "message": "Mealplanoutline Updated",
+        "data": mealplanoutline_schema.dump(record)
     })
 
-@app.route("/mealplanschema/delete/<id>", methods=["DELETE"])
-def delete_mealplanschema(id):
-    record = db.session.query(Mealplanschema).filter(Mealplanschema.id == id).first()
+@app.route("/mealplanoutline/delete/<id>", methods=["DELETE"])
+def delete_mealplanoutline(id):
+    record = db.session.query(Mealplanoutline).filter(Mealplanoutline.id == id).first()
     db.session.delete(record)
     db.session.commit()
     return jsonify({
         "status": 200,
-        "message": "Mealplanschema Deleted",
-        "data": mealplanschema_schema.dump(record)
+        "message": "Mealplanoutline Deleted",
+        "data": mealplanoutline_schema.dump(record)
     })
 
 
@@ -2028,9 +2028,9 @@ def add_rule():
     amount = data.get("amount")
     value = data.get("value")
     meaplan_id = data.get("meaplan_id")
-    mealplanschema_id = data.get("mealplanschema_id")
+    mealplanoutline_id = data.get("mealplanoutline_id")
 
-    record = Rule(rule_type, rule, amount, value, meaplan_id, mealplanschema_id)
+    record = Rule(rule_type, rule, amount, value, meaplan_id, mealplanoutline_id)
     db.session.add(record)
     db.session.commit()
 
