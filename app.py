@@ -2030,7 +2030,7 @@ def add_rule():
     meaplan_id = data.get("meaplan_id")
     mealplanschema_id = data.get("mealplanschema_id")
 
-    record = Mealplanschema(rule_type, rule, amount, value, meaplan_id, mealplanschema_id)
+    record = Rule(rule_type, rule, amount, value, meaplan_id, mealplanschema_id)
     db.session.add(record)
     db.session.commit()
 
