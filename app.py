@@ -235,7 +235,7 @@ class Rule(db.Model):
     mealplanoutline_id = db.Column(db.Integer, db.ForeignKey("mealplanoutline.id"), nullable=True)
     
     def __init__(self, rule_type, rule, amount, value, mealplan_id, mealplanoutline_id):
-        self.type = rule_type
+        self.rule_type = rule_type
         self.rule = rule
         self.amount = amount
         self.value = value
@@ -1967,7 +1967,7 @@ def add_mealplanoutline():
 @app.route("/mealplanoutline/get", methods=["GET"])
 def get_all_mealplanoutlines():
     records = db.session.query(Mealplanoutline).all()
-    return jsonify(multiple_shoppinglist_schema.dump(records))
+    return jsonify(multiple_mealplanoutline_schema.dump(records))
 
 @app.route("/mealplanoutline/get/<id>", methods=["GET"])
 def get_mealplanoutline_by_id(id):
