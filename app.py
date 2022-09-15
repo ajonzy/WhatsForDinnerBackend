@@ -2069,7 +2069,7 @@ def update_rule(id):
     if rule_type is not None:
         record.rule_type = rule_type
     if rule is not None:
-        record.number = rule
+        record.rule = rule
     if amount is not None:
         record.amount = amount
     if value is not None:
