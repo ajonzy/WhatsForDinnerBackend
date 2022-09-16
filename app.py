@@ -330,7 +330,7 @@ multiple_mealplanoutline_schema = MealplanoutlineSchema(many=True)
 
 class IngredientSchema(ma.Schema):
     class Meta:
-        fields = ("id", "name", "amount", "unit", "category", "recipe_id", "shoppingingredients")
+        fields = ("id", "name", "amount", "unit", "category", "recipe_id", "shoppingingredients", "ingredientsection_id")
     shoppingingredients = ma.Nested(multiple_shoppingingredient_schema)
 
 ingredient_schema = IngredientSchema()
