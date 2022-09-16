@@ -154,6 +154,7 @@ class Recipe(db.Model):
     meal_id = db.Column(db.Integer, db.ForeignKey("meal.id"), nullable=False)
     stepsections = db.relationship("Stepsection", backref="recipe", cascade='all, delete, delete-orphan')
     steps = db.relationship("Step", backref="recipe", cascade='all, delete, delete-orphan')
+    ingredientsections = db.relationship("Ingredientsection", backref="recipe", cascade='all, delete, delete-orphan')
     ingredients = db.relationship("Ingredient", backref="recipe", cascade='all, delete, delete-orphan')
     
     def __init__(self, meal_id):
@@ -182,19 +183,33 @@ class Step(db.Model):
         self.recipe_id = recipe_id
         self.stepsection_id = stepsection_id
 
+class Ingredientsection(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String, nullable=False, unique=False)
+    recipe_id = db.Column(db.Integer, db.ForeignKey("recipe.id"), nullable=False)
+    ingredients = db.relationship("Ingredient", backref="ingredientsection", cascade='all, delete, delete-orphan')
+    
+    def __init__(self, title, recipe_id):
+        self.title = title
+        self.recipe_id = recipe_id
+
 class Ingredient(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String, nullable=False, unique=False)
-    amount = db.Column(db.String, nullable=False, unique=False)
+    amount = db.Column(db.Integer, nullable=False, unique=False)
+    unit = db.Column(db.String, nullable=True, unique=False)
     category = db.Column(db.String, nullable=True, unique=False)
     recipe_id = db.Column(db.Integer, db.ForeignKey("recipe.id"), nullable=False)
     shoppingingredients = db.relationship("Shoppingingredient", backref="ingredient", cascade='all, delete, delete-orphan')
+    ingredientsection_id = db.Column(db.Integer, db.ForeignKey("ingredientsection.id"), nullable=True)
     
-    def __init__(self, name, amount, category, recipe_id):
+    def __init__(self, name, amount, unit, category, recipe_id, ingredientsection_id):
         self.name = name
         self.amount = amount
+        self.unit = unit
         self.category = category
         self.recipe_id = recipe_id
+        self.ingredientsection_id = ingredientsection_id
 
 class Mealplan(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -264,16 +279,18 @@ class Shoppinglist(db.Model):
 class Shoppingingredient(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String, nullable=False, unique=False)
-    amount = db.Column(db.String, nullable=False, unique=False)
+    amount = db.Column(db.Integer, nullable=False, unique=False)
+    unit = db.Column(db.String, nullable=True, unique=False)
     category = db.Column(db.String, nullable=True, unique=False)
     obtained = db.Column(db.Boolean, nullable=False, unique=False)
     meal_name = db.Column(db.String, nullable=True, unique=False)
     shoppinglist_id = db.Column(db.Integer, db.ForeignKey("shoppinglist.id"), nullable=False)
     ingredient_id = db.Column(db.Integer, db.ForeignKey("ingredient.id"), nullable=True)
     
-    def __init__(self, name, amount, category, meal_name, shoppinglist_id, ingredient_id):
+    def __init__(self, name, amount, unit, category, meal_name, shoppinglist_id, ingredient_id):
         self.name = name
         self.amount = amount
+        self.unit = unit
         self.category = category
         self.obtained = False
         self.meal_name = meal_name
@@ -283,7 +300,7 @@ class Shoppingingredient(db.Model):
 # Marshmallow Schemas
 class ShoppingingredientSchema(ma.Schema):
     class Meta:
-        fields = ("id", "name", "amount", "category", "obtained", "meal_name", "shoppinglist_id", "ingredient_id")
+        fields = ("id", "name", "amount", "unit", "category", "obtained", "meal_name", "shoppinglist_id", "ingredient_id")
 
 shoppingingredient_schema = ShoppingingredientSchema()
 multiple_shoppingingredient_schema = ShoppingingredientSchema(many=True)
@@ -313,11 +330,19 @@ multiple_mealplanoutline_schema = MealplanoutlineSchema(many=True)
 
 class IngredientSchema(ma.Schema):
     class Meta:
-        fields = ("id", "name", "amount", "category", "recipe_id", "shoppingingredients")
+        fields = ("id", "name", "amount", "unit", "category", "recipe_id", "shoppingingredients")
     shoppingingredients = ma.Nested(multiple_shoppingingredient_schema)
 
 ingredient_schema = IngredientSchema()
 multiple_ingredient_schema = IngredientSchema(many=True)
+
+class IngredientsectionSchema(ma.Schema):
+    class Meta:
+        fields = ("id", "title", "recipe_id", "ingredients")
+    ingredients = ma.Nested(multiple_ingredient_schema)
+
+ingredientsection_schema = IngredientsectionSchema()
+multiple_ingredientsection_schema = IngredientsectionSchema(many=True)
 
 class StepSchema(ma.Schema):
     class Meta:
@@ -336,9 +361,10 @@ multiple_stepsection_schema = StepsectionSchema(many=True)
 
 class RecipeSchema(ma.Schema):
     class Meta:
-        fields = ("id", "meal_id", "stepsections", "steps", "ingredients")
+        fields = ("id", "meal_id", "stepsections", "steps", "ingredientsections", "ingredients")
     stepsections = ma.Nested(multiple_stepsection_schema)
     steps = ma.Nested(multiple_step_schema)
+    ingredientsections = ma.Nested(multiple_ingredientsection_schema)
     ingredients = ma.Nested(multiple_ingredient_schema)
 
 recipe_schema = RecipeSchema()
@@ -1415,7 +1441,7 @@ def update_stepsection(id):
     data = request.get_json()
     title = data.get("title")
 
-    record = db.session.query(Stepsection).filter(Step.id == id).first()
+    record = db.session.query(Stepsection).filter(Stepsection.id == id).first()
     if title is not None:
         record.title = title
 
@@ -1542,6 +1568,112 @@ def delete_step(id):
     })
 
 
+@app.route("/ingredientsection/add", methods=["POST"])
+def add_ingredientsection():
+    if request.content_type != "application/json":
+        return jsonify({
+            "status": 400,
+            "message": "Error: Data must be sent as JSON.",
+            "data": {}
+        })
+
+    data = request.get_json()
+    title = data.get("title")
+    recipe_id = data.get("recipe_id")
+
+    record = Ingredientsection(title, recipe_id)
+    db.session.add(record)
+    db.session.commit()
+
+    return jsonify({
+        "status": 200,
+        "message": "Ingredientsection Added",
+        "data": ingredientsection_schema.dump(record)
+    })
+
+@app.route("/ingredientsection/add/multiple", methods=["POST"])
+def add_multiple_ingredientsections():
+    if request.content_type != "application/json":
+        return jsonify({
+            "status": 400,
+            "message": "Error: Data must be sent as JSON.",
+            "data": {}
+        })
+
+    data = request.get_json()
+    records = []
+    for data in data:
+        title = data.get("title")
+        recipe_id = data.get("recipe_id")
+
+        record = Ingredientsection(title, recipe_id)
+        db.session.add(record)
+        db.session.commit()
+
+        records.append(record)
+
+    return jsonify({
+        "status": 200,
+        "message": "Ingredientsections Added",
+        "data": multiple_ingredientsection_schema.dump(records)
+    })
+
+@app.route("/ingredientsection/get", methods=["GET"])
+def get_all_ingredientsections():
+    records = db.session.query(Ingredientsection).all()
+    return jsonify(multiple_ingredientsection_schema.dump(records))
+
+@app.route("/ingredientsection/get/<id>", methods=["GET"])
+def get_ingredientsection_by_id(id):
+    record = db.session.query(Ingredientsection).filter(Ingredientsection.id == id).first()
+    return jsonify(ingredientsection_schema.dump(record))
+
+@app.route("/ingredientsection/update/<id>", methods=["PUT"])
+def update_ingredientsection(id):
+    if request.content_type != "application/json":
+        return jsonify({
+            "status": 400,
+            "message": "Error: Data must be sent as JSON.",
+            "data": {}
+        })
+
+    data = request.get_json()
+    title = data.get("title")
+
+    record = db.session.query(Ingredientsection).filter(Ingredientsection.id == id).first()
+    if title is not None:
+        record.title = title
+
+    db.session.commit()
+
+    return jsonify({
+        "status": 200,
+        "message": "Ingredientsection Updated",
+        "data": ingredientsection_schema.dump(record)
+    })
+
+@app.route("/ingredientsection/delete/<id>", methods=["DELETE"])
+def delete_ingredientsection(id):
+    record = db.session.query(Ingredientsection).filter(Ingredientsection.id == id).first()
+    db.session.delete(record)
+    db.session.commit()
+
+    for ingredient in record.ingredients:
+        for shoppingingredient in ingredient.shoppingingredients:
+            db.session.delete(shoppingingredient)
+            db.session.commit()
+            socketio.emit("shoppingingredient-update", {
+                "data": shoppingingredient_schema.dump(shoppingingredient),
+                "type": "delete"
+            })
+
+    return jsonify({
+        "status": 200,
+        "message": "Ingredientsection Deleted",
+        "data": ingredientsection_schema.dump(record)
+    })
+
+
 @app.route("/ingredient/add", methods=["POST"])
 def add_ingredient():
     if request.content_type != "application/json":
@@ -1554,17 +1686,18 @@ def add_ingredient():
     data = request.get_json()
     name = data.get("name")
     amount = data.get("amount")
+    unit = data.get("unit")
     category = data.get("category")
     recipe_id = data.get("recipe_id")
 
-    record = Ingredient(name, amount, category, recipe_id)
+    record = Ingredient(name, amount, unit, category, recipe_id)
     db.session.add(record)
     db.session.commit()
 
     meal = db.session.query(Meal).join(Recipe).filter(Recipe.id == record.recipe_id).first()
     for mealplan in meal.mealplans:
         if mealplan.shoppinglist is not None:
-            shoppingingredient = Shoppingingredient(name, amount, category, meal.name, mealplan.shoppinglist[0].id, record.id)
+            shoppingingredient = Shoppingingredient(name, amount, unit, category, meal.name, mealplan.shoppinglist[0].id, record.id)
             db.session.add(shoppingingredient)
             db.session.commit()
             socketio.emit("shoppingingredient-update", {
@@ -1592,10 +1725,11 @@ def add_multiple_ingredients():
     for data in data:
         name = data.get("name")
         amount = data.get("amount")
+        unit = data.get("unit")
         category = data.get("category")
         recipe_id = data.get("recipe_id")
 
-        record = Ingredient(name, amount, category, recipe_id)
+        record = Ingredient(name, amount, unit, category, recipe_id)
         db.session.add(record)
         db.session.commit()
 
@@ -1604,7 +1738,7 @@ def add_multiple_ingredients():
         meal = db.session.query(Meal).join(Recipe).filter(Recipe.id == record.recipe_id).first()
         for mealplan in meal.mealplans:
             if mealplan.shoppinglist is not None:
-                shoppingingredient = Shoppingingredient(name, amount, category, meal.name, mealplan.shoppinglist[0].id, record.id)
+                shoppingingredient = Shoppingingredient(name, amount, unit, category, meal.name, mealplan.shoppinglist[0].id, record.id)
                 db.session.add(shoppingingredient)
                 db.session.commit()
                 socketio.emit("shoppingingredient-update", {
@@ -1640,6 +1774,7 @@ def update_ingredient(id):
     data = request.get_json()
     name = data.get("name")
     amount = data.get("amount")
+    unit = data.get("unit")
     category = data.get("category")
 
     record = db.session.query(Ingredient).filter(Ingredient.id == id).first()
@@ -1652,6 +1787,11 @@ def update_ingredient(id):
         record.amount = amount
         for shoppingingredient in record.shoppingingredients:
             shoppingingredient.amount = amount
+            db.session.commit()
+    if unit is not None:
+        record.unit = unit
+        for shoppingingredient in record.shoppingingredients:
+            shoppingingredient.unit = unit
             db.session.commit()
     if category is not None:
         record.category = category
@@ -2265,12 +2405,13 @@ def add_shoppingingredient():
     data = request.get_json()
     name = data.get("name")
     amount = data.get("amount")
+    unit = data.get("unit")
     category = data.get("category")
     meal_name = data.get("meal_name")
     shoppinglist_id = data.get("shoppinglist_id")
     ingredient_id = data.get("ingredient_id")
 
-    record = Shoppingingredient(name, amount, category, meal_name, shoppinglist_id, ingredient_id)
+    record = Shoppingingredient(name, amount, unit, category, meal_name, shoppinglist_id, ingredient_id)
     db.session.add(record)
     db.session.commit()
 
@@ -2299,12 +2440,13 @@ def add_multiple_shoppingingredients():
     for data in data:
         name = data.get("name")
         amount = data.get("amount")
+        unit = data.get("unit")
         category = data.get("category")
         meal_name = data.get("meal_name")
         shoppinglist_id = data.get("shoppinglist_id")
         ingredient_id = data.get("ingredient_id")
 
-        record = Shoppingingredient(name, amount, category, meal_name, shoppinglist_id, ingredient_id)
+        record = Shoppingingredient(name, amount, unit, category, meal_name, shoppinglist_id, ingredient_id)
         db.session.add(record)
         db.session.commit()
 
@@ -2343,6 +2485,7 @@ def update_shoppingingredient(id):
     data = request.get_json()
     name = data.get("name")
     amount = data.get("amount")
+    unit = data.get("unit")
     category = data.get("category")
     obtained = data.get("obtained")
     meal_name = data.get("meal_name")
@@ -2352,6 +2495,8 @@ def update_shoppingingredient(id):
         record.name = name
     if amount is not None:
         record.amount = amount
+    if unit is not None:
+        record.unit = unit
     if category is not None:
         record.category = category
     if obtained is not None:
