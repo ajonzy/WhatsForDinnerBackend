@@ -1689,8 +1689,9 @@ def add_ingredient():
     unit = data.get("unit")
     category = data.get("category")
     recipe_id = data.get("recipe_id")
+    ingredientsection_id = data.get("ingredientsection_id")
 
-    record = Ingredient(name, amount, unit, category, recipe_id)
+    record = Ingredient(name, amount, unit, category, recipe_id, ingredientsection_id)
     db.session.add(record)
     db.session.commit()
 
@@ -1728,8 +1729,9 @@ def add_multiple_ingredients():
         unit = data.get("unit")
         category = data.get("category")
         recipe_id = data.get("recipe_id")
+        ingredientsection_id = data.get("ingredientsection_id")
 
-        record = Ingredient(name, amount, unit, category, recipe_id)
+        record = Ingredient(name, amount, unit, category, recipe_id, ingredientsection_id)
         db.session.add(record)
         db.session.commit()
 
