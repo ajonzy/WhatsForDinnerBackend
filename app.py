@@ -395,8 +395,8 @@ class MealplanSchema(ma.Schema):
         fields = ("id", "name", "created_on", "meals", "rules", "user_username", "user_id", "shoppinglist", "sub_shoppinglist")
     meals = ma.Nested(multiple_meal_schema)
     rules = ma.Nested(multiple_rule_schema)
-    shoppinglist = base_fields.Function(lambda fields: shoppinglist_schema.dump(list(filter(lambda shoppinglist: not fields.shoppinglists.is_sublist, fields.shoppinglists))[0] if len(fields.shoppinglists) > 0 else None))
-    sub_shoppinglist = base_fields.Function(lambda fields: shoppinglist_schema.dump(list(filter(lambda shoppinglist: not fields.shoppinglists.is_sublist, fields.shoppinglists))[0] if len(fields.shoppinglists) > 1 else None))
+    shoppinglist = base_fields.Function(lambda fields: shoppinglist_schema.dump(list(filter(lambda shoppinglist: not shoppinglist.is_sublist, fields.shoppinglists))[0] if len(fields.shoppinglists) > 0 else None))
+    sub_shoppinglist = base_fields.Function(lambda fields: shoppinglist_schema.dump(list(filter(lambda shoppinglist: shoppinglist.is_sublist, fields.shoppinglists))[0] if len(fields.shoppinglists) > 1 else None))
 
 mealplan_schema = MealplanSchema()
 multiple_mealplan_schema = MealplanSchema(many=True)
