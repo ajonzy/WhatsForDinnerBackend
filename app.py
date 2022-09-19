@@ -196,7 +196,7 @@ class Ingredientsection(db.Model):
 class Ingredient(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String, nullable=False, unique=False)
-    amount = db.Column(db.Integer, nullable=False, unique=False)
+    amount = db.Column(db.String, nullable=False, unique=False)
     unit = db.Column(db.String, nullable=True, unique=False)
     category = db.Column(db.String, nullable=True, unique=False)
     recipe_id = db.Column(db.Integer, db.ForeignKey("recipe.id"), nullable=False)
@@ -219,7 +219,7 @@ class Mealplan(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     meals = db.relationship("Meal", secondary="mealplans_table")
     rules = db.relationship("Rule", backref="mealplan", cascade='all, delete, delete-orphan')
-    shoppinglist = db.relationship("Shoppinglist", backref="mealplan", cascade='all, delete, delete-orphan')
+    shoppinglists = db.relationship("Shoppinglist", backref="mealplan", cascade='all, delete, delete-orphan')
     shared_users = db.relationship("User", secondary="shared_mealplans_table")
     
     def __init__(self, name, created_on, user_username, user_id):
@@ -262,16 +262,18 @@ class Shoppinglist(db.Model):
     name = db.Column(db.String, nullable=False, unique=False)
     created_on = db.Column(db.String, nullable=False, unique=False)
     updates_hidden = db.Column(db.Boolean, nullable=False, unique=False)
+    is_sublist = db.Column(db.Boolean, nullable=False, unique=False)
     user_username = db.Column(db.String, nullable=False, unique=False)
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     mealplan_id = db.Column(db.Integer, db.ForeignKey("mealplan.id"), nullable=True)
     shoppingingredients = db.relationship("Shoppingingredient", backref="shoppinglist", cascade='all, delete, delete-orphan')
     shared_users = db.relationship("User", secondary="shared_shoppinglists_table")
     
-    def __init__(self, name, created_on, updates_hidden, user_username, user_id, mealplan_id):
+    def __init__(self, name, created_on, updates_hidden, is_sublist, user_username, user_id, mealplan_id):
         self.name = name
         self.created_on = created_on
         self.updates_hidden = updates_hidden
+        self.is_sublist = is_sublist
         self.user_username = user_username
         self.user_id = user_id
         self.mealplan_id = mealplan_id
@@ -279,20 +281,22 @@ class Shoppinglist(db.Model):
 class Shoppingingredient(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String, nullable=False, unique=False)
-    amount = db.Column(db.Integer, nullable=False, unique=False)
+    amount = db.Column(db.String, nullable=False, unique=False)
     unit = db.Column(db.String, nullable=True, unique=False)
     category = db.Column(db.String, nullable=True, unique=False)
     obtained = db.Column(db.Boolean, nullable=False, unique=False)
+    multiplier = db.Column(db.Integer, nullable=False, unique=False)
     meal_name = db.Column(db.String, nullable=True, unique=False)
     shoppinglist_id = db.Column(db.Integer, db.ForeignKey("shoppinglist.id"), nullable=False)
     ingredient_id = db.Column(db.Integer, db.ForeignKey("ingredient.id"), nullable=True)
     
-    def __init__(self, name, amount, unit, category, meal_name, shoppinglist_id, ingredient_id):
+    def __init__(self, name, amount, unit, category, multiplier, meal_name, shoppinglist_id, ingredient_id):
         self.name = name
         self.amount = amount
         self.unit = unit
         self.category = category
         self.obtained = False
+        self.multiplier = multiplier
         self.meal_name = meal_name
         self.shoppinglist_id = shoppinglist_id
         self.ingredient_id = ingredient_id
@@ -300,14 +304,14 @@ class Shoppingingredient(db.Model):
 # Marshmallow Schemas
 class ShoppingingredientSchema(ma.Schema):
     class Meta:
-        fields = ("id", "name", "amount", "unit", "category", "obtained", "meal_name", "shoppinglist_id", "ingredient_id")
+        fields = ("id", "name", "amount", "unit", "category", "obtained", "multiplier", "meal_name", "shoppinglist_id", "ingredient_id")
 
 shoppingingredient_schema = ShoppingingredientSchema()
 multiple_shoppingingredient_schema = ShoppingingredientSchema(many=True)
 
 class ShoppinglistSchema(ma.Schema):
     class Meta:
-        fields = ("id", "name", "created_on", "updates_hidden", "user_username", "user_id", "mealplan_id", "shoppingingredients")
+        fields = ("id", "name", "created_on", "updates_hidden", "is_sublist", "user_username", "user_id", "mealplan_id", "shoppingingredients")
     shoppingingredients = ma.Nested(multiple_shoppingingredient_schema)
 
 shoppinglist_schema = ShoppinglistSchema()
@@ -388,10 +392,11 @@ multiple_meal_schema = MealSchema(many=True)
 
 class MealplanSchema(ma.Schema):
     class Meta:
-        fields = ("id", "name", "created_on", "meals", "rules", "user_username", "user_id", "shoppinglist")
+        fields = ("id", "name", "created_on", "meals", "rules", "user_username", "user_id", "shoppinglist", "sub_shoppinglist")
     meals = ma.Nested(multiple_meal_schema)
     rules = ma.Nested(multiple_rule_schema)
-    shoppinglist = base_fields.Function(lambda fields: shoppinglist_schema.dump(fields.shoppinglist[0] if len(fields.shoppinglist) > 0 else None))
+    shoppinglist = base_fields.Function(lambda fields: shoppinglist_schema.dump(filter(lambda shoppinglist: not fields.shoppinglists.is_sublist)[0] if len(fields.shoppinglists) > 0 else None))
+    sub_shoppinglist = base_fields.Function(lambda fields: shoppinglist_schema.dump(filter(lambda shoppinglist: not fields.shoppinglists.is_sublist)[0] if len(fields.shoppinglists) > 1 else None))
 
 mealplan_schema = MealplanSchema()
 multiple_mealplan_schema = MealplanSchema(many=True)
@@ -2250,11 +2255,12 @@ def add_shoppinglist():
     name = data.get("name")
     created_on = data.get("created_on")
     updates_hidden = data.get("updates_hidden")
+    is_sublist = data.get("is_sublist", False)
     user_username = data.get("user_username")
     user_id = data.get("user_id")
     mealplan_id = data.get("mealplan_id")
 
-    record = Shoppinglist(name, created_on, updates_hidden, user_username, user_id, mealplan_id)
+    record = Shoppinglist(name, created_on, updates_hidden, is_sublist, user_username, user_id, mealplan_id)
     db.session.add(record)
     db.session.commit()
 
@@ -2409,11 +2415,12 @@ def add_shoppingingredient():
     amount = data.get("amount")
     unit = data.get("unit")
     category = data.get("category")
+    multiplier = data.get("multiplier", 1)
     meal_name = data.get("meal_name")
     shoppinglist_id = data.get("shoppinglist_id")
     ingredient_id = data.get("ingredient_id")
 
-    record = Shoppingingredient(name, amount, unit, category, meal_name, shoppinglist_id, ingredient_id)
+    record = Shoppingingredient(name, amount, unit, category, multiplier, meal_name, shoppinglist_id, ingredient_id)
     db.session.add(record)
     db.session.commit()
 
@@ -2444,11 +2451,12 @@ def add_multiple_shoppingingredients():
         amount = data.get("amount")
         unit = data.get("unit")
         category = data.get("category")
+        multiplier = data.get("multiplier", 1)
         meal_name = data.get("meal_name")
         shoppinglist_id = data.get("shoppinglist_id")
         ingredient_id = data.get("ingredient_id")
 
-        record = Shoppingingredient(name, amount, unit, category, meal_name, shoppinglist_id, ingredient_id)
+        record = Shoppingingredient(name, amount, unit, category, multiplier, meal_name, shoppinglist_id, ingredient_id)
         db.session.add(record)
         db.session.commit()
 
@@ -2489,6 +2497,7 @@ def update_shoppingingredient(id):
     amount = data.get("amount")
     unit = data.get("unit")
     category = data.get("category")
+    multiplier = data.get("multiplier")
     obtained = data.get("obtained")
     meal_name = data.get("meal_name")
 
@@ -2501,6 +2510,8 @@ def update_shoppingingredient(id):
         record.unit = unit
     if category is not None:
         record.category = category
+    if multiplier is not None:
+        record.multiplier = multiplier
     if obtained is not None:
         record.obtained = obtained
     if meal_name is not None:
