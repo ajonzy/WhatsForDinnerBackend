@@ -1861,7 +1861,7 @@ def add_mealplan():
     db.session.add(record)
     db.session.commit()
 
-    shoppinglist = Shoppinglist(f"{name} Mealplan", created_on, False, user_username, user_id, record.id)
+    shoppinglist = Shoppinglist(f"{name} Mealplan", created_on, False, False, user_username, user_id, record.id)
     db.session.add(shoppinglist)
     db.session.commit()
 
@@ -1954,7 +1954,7 @@ def add_meal_to_mealplan():
     db.session.commit()
 
     for ingredient in meal.recipe[0].ingredients:
-        shoppingingredient = Shoppingingredient(ingredient.name, ingredient.amount, ingredient.category, False, meal.name, record.shoppinglist[0].id, ingredient.id)
+        shoppingingredient = Shoppingingredient(ingredient.name, ingredient.amount, ingredient.category, meal.name, record.shoppinglist[0].id, ingredient.id)
         db.session.add(shoppingingredient)
         db.session.commit()
         socketio.emit("shoppingingredient-update", {
