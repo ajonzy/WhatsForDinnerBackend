@@ -1703,7 +1703,7 @@ def add_ingredient():
     meal = db.session.query(Meal).join(Recipe).filter(Recipe.id == record.recipe_id).first()
     for mealplan in meal.mealplans:
         if mealplan.shoppinglists is not None:
-            shoppingingredient = Shoppingingredient(name, amount, unit, category, meal.name, mealplan_schema.dump(mealplan).shoppinglist.id, record.id)
+            shoppingingredient = Shoppingingredient(name, amount, unit, category, meal.name, mealplan_schema.dump(mealplan)["shoppinglist"]["id"], record.id)
             db.session.add(shoppingingredient)
             db.session.commit()
             socketio.emit("shoppingingredient-update", {
@@ -1745,7 +1745,7 @@ def add_multiple_ingredients():
         meal = db.session.query(Meal).join(Recipe).filter(Recipe.id == record.recipe_id).first()
         for mealplan in meal.mealplans:
             if mealplan.shoppinglists is not None:
-                shoppingingredient = Shoppingingredient(name, amount, unit, category, meal.name, mealplan_schema.dump(mealplan).shoppinglist.id, record.id)
+                shoppingingredient = Shoppingingredient(name, amount, unit, category, meal.name, mealplan_schema.dump(mealplan)["shoppinglist"]["id"], record.id)
                 db.session.add(shoppingingredient)
                 db.session.commit()
                 socketio.emit("shoppingingredient-update", {
