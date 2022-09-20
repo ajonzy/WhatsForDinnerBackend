@@ -1069,13 +1069,14 @@ def update_meal(id):
 @app.route("/meal/delete/<id>", methods=["DELETE"])
 def delete_meal(id):
     record = db.session.query(Meal).filter(Meal.id == id).first()
+    recipe = db.session.query(Recipe).filter(Recipe.meal_id == record.id).first()
     for user in record.shared_users:
         user.shared_meals.remove(record)
         db.session.commit()
     db.session.delete(record)
     db.session.commit()
 
-    for ingredient in record.ingredients:
+    for ingredient in recipe.ingredients:
         for shoppingingredient in ingredient.shoppingingredients:
             db.session.delete(shoppingingredient)
             db.session.commit()
