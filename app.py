@@ -1707,10 +1707,9 @@ def add_ingredient():
             shoppinglist = mealplan_schema.dump(mealplan)["shoppinglist"]
             multiplier =  reduce(lambda lowest, next_ingredient: lowest if lowest < next_ingredient else next_ingredient, shoppinglist["shoppingingredients"], 1)
             shoppingingredient = Shoppingingredient(name, amount, unit, category, multiplier, meal.name, shoppinglist["id"], record.id)
-            shoppingingredient = Shoppingingredient(name, amount, unit, category, meal.name, mealplan_schema.dump(mealplan)["shoppinglist"]["id"], record.id)
             db.session.add(shoppingingredient)
             db.session.commit()
-            socketio.emit("shoppingingredient-update", {
+            socketio.emit("shared-shoppingingredient-update", {
                 "data": shoppingingredient_schema.dump(shoppingingredient),
                 "type": "add"
             })
@@ -1754,7 +1753,7 @@ def add_multiple_ingredients():
                 shoppingingredient = Shoppingingredient(name, amount, unit, category, multiplier, meal.name, shoppinglist["id"], record.id)
                 db.session.add(shoppingingredient)
                 db.session.commit()
-                socketio.emit("shoppingingredient-update", {
+                socketio.emit("shared-shoppingingredient-update", {
                     "data": shoppingingredient_schema.dump(shoppingingredient),
                     "type": "add"
                 })
@@ -1813,7 +1812,7 @@ def update_ingredient(id):
             db.session.commit()
 
     for shoppingingredient in record.shoppingingredients:
-        socketio.emit("shoppingingredient-update", {
+        socketio.emit("shared-shoppingingredient-update", {
             "data": shoppingingredient_schema.dump(shoppingingredient),
             "type": "update"
         })
@@ -1835,7 +1834,7 @@ def delete_ingredient(id):
     for shoppingingredient in record.shoppingingredients:
         db.session.delete(shoppingingredient)
         db.session.commit()
-        socketio.emit("shoppingingredient-update", {
+        socketio.emit("shared-shoppingingredient-update", {
             "data": shoppingingredient_schema.dump(shoppingingredient),
             "type": "delete"
         })
