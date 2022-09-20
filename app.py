@@ -1975,7 +1975,7 @@ def add_meal_to_mealplan():
 
     shoppinglist = mealplan_schema.dump(record)["shoppinglist"]
     for ingredient in meal.recipe[0].ingredients:
-        shoppingingredient = Shoppingingredient(ingredient.name, ingredient.amount, ingredient.category, meal.name, shoppinglist["id"], ingredient.id)
+        shoppingingredient = Shoppingingredient(ingredient.name, ingredient.amount, ingredient.unit, ingredient.category, 1, meal.name, shoppinglist["id"], ingredient.id)
         db.session.add(shoppingingredient)
         db.session.commit()
         socketio.emit("shoppingingredient-update", {
