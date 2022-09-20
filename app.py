@@ -1924,9 +1924,13 @@ def share_mealplan():
     shared_user.shared_mealplans.append(shared_mealplan)
     db.session.commit()
 
-    if len(shared_mealplan.shoppinglist) > 0:
-        shared_user.shared_shoppinglists.append(shared_mealplan.shoppinglist[0])
+    if len(shared_mealplan.shoppinglists) > 0:
+        shared_mealplan = mealplan_schema.dump(shared_mealplan)
+        shared_user.shared_shoppinglists.append(shared_mealplan["shoppinglist"])
         db.session.commit()
+        if len(shared_mealplan.shoppinglists) > 1:
+            shared_user.shared_shoppinglists.append(shared_mealplan["sub_shoppinglist"])
+            db.session.commit()
 
     notification = Notification("mealplan", shared_mealplan.user_username, shared_mealplan.name, shared_user.id)
     db.session.add(notification)
@@ -1969,8 +1973,9 @@ def add_meal_to_mealplan():
     record.meals.append(meal)
     db.session.commit()
 
+    shoppinglist = mealplan_schema.dump(record)["shoppinglist"]
     for ingredient in meal.recipe[0].ingredients:
-        shoppingingredient = Shoppingingredient(ingredient.name, ingredient.amount, ingredient.category, meal.name, record.shoppinglist[0].id, ingredient.id)
+        shoppingingredient = Shoppingingredient(ingredient.name, ingredient.amount, ingredient.category, meal.name, shoppinglist["id"], ingredient.id)
         db.session.add(shoppingingredient)
         db.session.commit()
         socketio.emit("shoppingingredient-update", {
@@ -2012,7 +2017,8 @@ def update_mealplan(id):
     record = db.session.query(Mealplan).filter(Mealplan.id == id).first()
     if name is not None:
         record.name = name
-        record.shoppinglist[0].name = f"{name} Mealplan"
+        for shoppinglist in record.shoppinglists:
+            shoppinglist.name = f"{name} Mealplan"
 
     db.session.commit()
 
@@ -2051,9 +2057,10 @@ def unshare_mealplan(id, user_id):
     shared_user.shared_mealplans.remove(record)
     db.session.commit()
 
-    if len(record.shoppinglist) > 0:
-        shared_user.shared_shoppinglists.remove(record.shoppinglist[0])
-        db.session.commit()
+    if len(record.shoppinglists) > 0:
+        for shoppinglist in record.shoppinglists:
+            shared_user.shared_shoppinglists.remove(shoppinglist)
+            db.session.commit()
 
     return jsonify({
         "status": 200,
@@ -2083,9 +2090,10 @@ def delete_meal_from_mealplan():
     record.meals.remove(meal)
     db.session.commit()
 
+    shoppinglist = mealplan_schema.dum(record)["shoppinglist"]
     for ingredient in meal.recipe[0].ingredients:
         for shoppingingredient in ingredient.shoppingingredients:
-            if shoppingingredient.shoppinglist_id == record.shoppinglist[0].id:
+            if shoppingingredient.shoppinglist_id == shoppinglist["id"]:
                 db.session.delete(shoppingingredient)
                 db.session.commit()
                 socketio.emit("shoppingingredient-update", {
