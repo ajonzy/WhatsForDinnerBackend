@@ -1074,6 +1074,16 @@ def delete_meal(id):
         db.session.commit()
     db.session.delete(record)
     db.session.commit()
+
+    for ingredient in record.ingredients:
+        for shoppingingredient in ingredient.shoppingingredients:
+            db.session.delete(shoppingingredient)
+            db.session.commit()
+            socketio.emit("shared-shoppingingredient-update", {
+                "data": shoppingingredient_schema.dump(shoppingingredient),
+                "type": "delete"
+            })
+
     return jsonify({
         "status": 200,
         "message": "Meal Deleted",
