@@ -1716,7 +1716,7 @@ def add_ingredient():
     for mealplan in meal.mealplans:
         if mealplan.shoppinglists is not None:
             shoppinglist = mealplan_schema.dump(mealplan)["shoppinglist"]
-            multiplier =  reduce(lambda lowest, next_ingredient: lowest if lowest < next_ingredient.multiplier else next_ingredient.multiplier, shoppinglist["shoppingingredients"], 1)[0]
+            multiplier =  reduce(lambda lowest, next_ingredient: lowest if lowest < next_ingredient["multiplier"] else next_ingredient["multiplier"], shoppinglist["shoppingingredients"], 1)[0]
             shoppingingredient = Shoppingingredient(name, amount, unit, category, multiplier, meal.name, shoppinglist["id"], record.id)
             db.session.add(shoppingingredient)
             db.session.commit()
@@ -1760,7 +1760,7 @@ def add_multiple_ingredients():
         for mealplan in meal.mealplans:
             if mealplan.shoppinglists is not None:
                 shoppinglist = mealplan_schema.dump(mealplan)["shoppinglist"]
-                multiplier = reduce(lambda lowest, next_ingredient: lowest if lowest < next_ingredient.multiplier else next_ingredient.multiplier, shoppinglist["shoppingingredients"], 1)[0]
+                multiplier = reduce(lambda lowest, next_ingredient: lowest if lowest < next_ingredient["multiplier"] else next_ingredient["multiplier"], shoppinglist["shoppingingredients"], 1)[0]
                 shoppingingredient = Shoppingingredient(name, amount, unit, category, multiplier, meal.name, shoppinglist["id"], record.id)
                 db.session.add(shoppingingredient)
                 db.session.commit()
