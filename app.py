@@ -1872,6 +1872,7 @@ def add_mealplan():
     user_username = data.get("user_username")
     user_id = data.get("user_id")
     meals = data.get("meals")
+    multipliers = data.get("multipliers", {})
 
     record = Mealplan(name, created_on, user_username, user_id)
     db.session.add(record)
@@ -1887,7 +1888,7 @@ def add_mealplan():
         db.session.commit()
 
         for ingredient in meal.recipe[0].ingredients:
-            shoppingingredient = Shoppingingredient(ingredient.name, ingredient.amount, ingredient.unit, ingredient.category, 1, meal.name, shoppinglist.id, ingredient.id)
+            shoppingingredient = Shoppingingredient(ingredient.name, ingredient.amount, ingredient.unit, ingredient.category, multipliers.get(meal.id, 1), meal.name, shoppinglist.id, ingredient.id)
             db.session.add(shoppingingredient)
             db.session.commit()
 
@@ -1966,6 +1967,7 @@ def add_meal_to_mealplan():
     data = request.get_json()
     mealplan_id = data.get("mealplan_id")
     meal_id = data.get("meal_id")
+    multiplier = data.get("multiplier", 1)
 
     record = db.session.query(Mealplan).filter(Mealplan.id == mealplan_id).first()
     meal = db.session.query(Meal).filter(Meal.id == meal_id).first()
@@ -1975,7 +1977,7 @@ def add_meal_to_mealplan():
 
     shoppinglist = mealplan_schema.dump(record)["shoppinglist"]
     for ingredient in meal.recipe[0].ingredients:
-        shoppingingredient = Shoppingingredient(ingredient.name, ingredient.amount, ingredient.unit, ingredient.category, 1, meal.name, shoppinglist["id"], ingredient.id)
+        shoppingingredient = Shoppingingredient(ingredient.name, ingredient.amount, ingredient.unit, ingredient.category, multiplier, meal.name, shoppinglist["id"], ingredient.id)
         db.session.add(shoppingingredient)
         db.session.commit()
         socketio.emit("shoppingingredient-update", {
