@@ -2036,6 +2036,19 @@ def delete_mealplan(id):
         db.session.commit()
     db.session.delete(record)
     db.session.commit()
+
+    shoppinglist = mealplan_schema.dump(record)["shoppinglist"]
+    for meal in record.meals:
+        for ingredient in meal.recipe[0].ingredients:
+            for shoppingingredient in ingredient.shoppingingredients:
+                if shoppingingredient.shoppinglist_id == shoppinglist["id"]:
+                    db.session.delete(shoppingingredient)
+                    db.session.commit()
+                    socketio.emit("shoppingingredient-update", {
+                        "data": shoppingingredient_schema.dump(shoppingingredient),
+                        "type": "delete"
+                    })
+
     return jsonify({
         "status": 200,
         "message": "Mealplan Deleted",
@@ -2090,7 +2103,7 @@ def delete_meal_from_mealplan():
     record.meals.remove(meal)
     db.session.commit()
 
-    shoppinglist = mealplan_schema.dum(record)["shoppinglist"]
+    shoppinglist = mealplan_schema.dump(record)["shoppinglist"]
     for ingredient in meal.recipe[0].ingredients:
         for shoppingingredient in ingredient.shoppingingredients:
             if shoppingingredient.shoppinglist_id == shoppinglist["id"]:
