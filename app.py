@@ -1888,7 +1888,7 @@ def add_mealplan():
         db.session.commit()
 
         for ingredient in meal.recipe[0].ingredients:
-            shoppingingredient = Shoppingingredient(ingredient.name, ingredient.amount, ingredient.unit, ingredient.category, multipliers.get(meal.id, 1), meal.name, shoppinglist.id, ingredient.id)
+            shoppingingredient = Shoppingingredient(ingredient.name, ingredient.amount, ingredient.unit, ingredient.category, multipliers.get(str(meal.id), 1), meal.name, shoppinglist.id, ingredient.id)
             db.session.add(shoppingingredient)
             db.session.commit()
 
