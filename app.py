@@ -2310,6 +2310,15 @@ def add_shoppinglist():
             user.shared_shoppinglists.append(record)
             db.session.commit()
 
+            socketio.emit("shoppinglist-share-update", {
+                "data": {
+                    "shoppinglist": shoppinglist_schema.dump(record),
+                    "user": user_schema.dump(user),
+                    "notification": {}
+                },
+                "type": "add"
+            })
+
     return jsonify({
         "status": 200,
         "message": "Shoppinglist Added",
@@ -2410,6 +2419,22 @@ def delete_shoppinglist(id):
         db.session.commit()
     db.session.delete(record)
     db.session.commit()
+
+    if record.mealplan_id is not None:
+        mealplan = db.session.query(Mealplan).filter(Mealplan.id == record.mealplan_id).first()
+        for user in mealplan.shared_users:
+            user.shared_shoppinglists.remove(record)
+            db.session.commit()
+
+            socketio.emit("shoppinglist-share-update", {
+                "data": {
+                    "shoppinglist": shoppinglist_schema.dump(record),
+                    "user": user_schema.dump(user),
+                    "notification": {}
+                },
+                "type": "delete"
+            })
+
     return jsonify({
         "status": 200,
         "message": "Shoppinglist Deleted",
