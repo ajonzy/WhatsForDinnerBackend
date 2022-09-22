@@ -2423,9 +2423,6 @@ def delete_shoppinglist(id):
     if record.mealplan_id is not None:
         mealplan = db.session.query(Mealplan).filter(Mealplan.id == record.mealplan_id).first()
         for user in mealplan.shared_users:
-            user.shared_shoppinglists.remove(record)
-            db.session.commit()
-
             socketio.emit("shoppinglist-share-update", {
                 "data": {
                     "shoppinglist": shoppinglist_schema.dump(record),
