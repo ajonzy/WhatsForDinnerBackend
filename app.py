@@ -1926,11 +1926,12 @@ def share_mealplan():
     db.session.commit()
 
     if len(shared_mealplan.shoppinglists) > 0:
-        shared_mealplan = mealplan_schema.dump(shared_mealplan)
-        shared_user.shared_shoppinglists.append(shared_mealplan["shoppinglist"])
-        db.session.commit()
+        shared_mealplan_schema = mealplan_schema.dump(shared_mealplan)
+        shoppinglist = db.session.query(Shoppinglist).filter(Shoppinglist.id == shared_mealplan_schema["shoppinglist"]["id"]).first()
+        shared_user.shared_shoppinglists.append(shoppinglist)
         if len(shared_mealplan.shoppinglists) > 1:
-            shared_user.shared_shoppinglists.append(shared_mealplan["sub_shoppinglist"])
+            sub_shoppinglist = db.session.query(Shoppinglist).filter(Shoppinglist.id == shared_mealplan_schema["sub_shoppinglist"]["id"]).first()
+            shared_user.shared_shoppinglists.append(sub_shoppinglist)
             db.session.commit()
 
     notification = Notification("mealplan", shared_mealplan.user_username, shared_mealplan.name, shared_user.id)
