@@ -103,7 +103,6 @@ class Session(db.Model):
         self.ip = ip
         self.user_id = user_id
 
-# TODO: Settings: change username/password/email, default shoppinglist sort, toggle notifications, allow nonfriend sharing, default mealplan schema, autodelete mealplans/shoppinglists, logout all
 class Settings(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     default_mealplan_outline = db.Column(db.Integer, nullable=True, unique=False)
@@ -152,20 +151,21 @@ class Meal(db.Model):
     difficulty = db.Column(db.Integer, nullable=False, unique=False)
     sleep_until = db.Column(db.String, nullable=True, unique=False)
     user_username = db.Column(db.String, nullable=False, unique=False)
-    #TODO: owner_username
+    owner_username = db.Column(db.String, nullable=False, unique=False)
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     recipe = db.relationship("Recipe", backref="meal", cascade='all, delete, delete-orphan')
     categories = db.relationship("Category", secondary="categories_table")
     mealplans = db.relationship("Mealplan", secondary="mealplans_table")
     shared_users = db.relationship("User", secondary="shared_meals_table")
     
-    def __init__(self, name, description, image_url, difficulty, user_username, user_id):
+    def __init__(self, name, description, image_url, difficulty, user_username, owner_username, user_id):
         self.name = name
         self.description = description
         self.image_url = image_url
         self.difficulty = difficulty
         self.sleep_until = None
         self.user_username = user_username
+        self.owner_username = owner_username
         self.user_id = user_id
 
 class Category(db.Model):
@@ -1055,11 +1055,12 @@ def add_meal():
     description = data.get("description")
     image_url = data.get("image_url")
     difficulty = data.get("difficulty", 0)
+    owner_username = data.get("owner_username")
     user_id = data.get("user_id")
 
     user = db.session.query(User).filter(User.id == user_id).first()
 
-    record = Meal(name, description, image_url, difficulty, user.username, user_id)
+    record = Meal(name, description, image_url, difficulty, user.username, owner_username, user_id)
     db.session.add(record)
     db.session.commit()
 
