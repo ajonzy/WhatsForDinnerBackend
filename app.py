@@ -412,7 +412,7 @@ multiple_category_schema = CategorySchema(many=True)
 
 class MealSchema(ma.Schema):
     class Meta:
-        fields = ("id", "name", "description", "image_url", "difficulty", "sleep_until", "categories", "user_username", "user_id", "recipe")
+        fields = ("id", "name", "description", "image_url", "difficulty", "sleep_until", "categories", "user_username", "owner_username", "user_id", "recipe")
     categories = ma.Nested(multiple_category_schema)
     recipe = base_fields.Function(lambda fields: recipe_schema.dump(fields.recipe[0] if len(fields.recipe) > 0 else None))
 
