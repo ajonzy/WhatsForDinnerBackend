@@ -79,6 +79,7 @@ class User(db.Model):
     mealplanoutlines = db.relationship("Mealplanoutline", backref="user", cascade='all, delete, delete-orphan')
     shoppinglists = db.relationship("Shoppinglist", backref="user", cascade='all, delete, delete-orphan')
     notifications = db.relationship("Notification", backref="user", cascade='all, delete, delete-orphan')
+    settings = db.relationship("Settings", backref="user", cascade='all, delete, delete-orphan')
     shared_meals = db.relationship("Meal", secondary="shared_meals_table")
     shared_mealplans = db.relationship("Mealplan", secondary="shared_mealplans_table")
     shared_shoppinglists = db.relationship("Shoppinglist", secondary="shared_shoppinglists_table")
@@ -102,6 +103,34 @@ class Session(db.Model):
         self.ip = ip
         self.user_id = user_id
 
+# TODO: Settings: change username/password/email, default shoppinglist sort, toggle notifications, allow nonfriend sharing, default mealplan schema, autodelete mealplans/shoppinglists, logout all
+class Settings(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    default_mealplan_outline = db.Column(db.Integer, nullable=True, unique=False)
+    autodelete_mealplans = db.Column(db.Boolean, nullable=False, unique=False)
+    autodelete_mealplans_schedule_number = db.Column(db.Integer, nullable=False, unique=False)
+    autodelete_mealplans_schedule_unit = db.Column(db.String, nullable=False, unique=False)
+    default_shoppinglist_sort = db.Column(db.String, nullable=False, unique=False)
+    autodelete_shoppinglists = db.Column(db.Boolean, nullable=False, unique=False)
+    autodelete_shoppinglists_schedule_number = db.Column(db.Integer, nullable=False, unique=False)
+    autodelete_shoppinglists_schedule_unit = db.Column(db.String, nullable=False, unique=False)
+    allow_notifications = db.Column(db.Boolean, nullable=False, unique=False)
+    allow_nonfriend_sharing = db.Column(db.Boolean, nullable=False, unique=False)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    
+    def __init__(self, default_mealplan_outline, autodelete_mealplans, autodelete_mealplans_schedule_number, autodelete_mealplans_schedule_unit, default_shoppinglist_sort, autodelete_shoppinglists, autodelete_shoppinglists_schedule_number, autodelete_shoppinglists_schedule_unit, allow_notifications, allow_nonfriend_sharing, user_id):
+        self.default_mealplan_outline = default_mealplan_outline
+        self.autodelete_mealplans = autodelete_mealplans
+        self.autodelete_mealplans_schedule_number = autodelete_mealplans_schedule_number
+        self.autodelete_mealplans_schedule_unit = autodelete_mealplans_schedule_unit
+        self.default_shoppinglist_sort = default_shoppinglist_sort
+        self.autodelete_shoppinglists = autodelete_shoppinglists
+        self.autodelete_shoppinglists_schedule_number = autodelete_shoppinglists_schedule_number
+        self.autodelete_shoppinglists_schedule_unit = autodelete_shoppinglists_schedule_unit
+        self.allow_notifications = allow_notifications
+        self.allow_nonfriend_sharing = allow_nonfriend_sharing
+        self.user_id = user_id
+
 class Notification(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     category = db.Column(db.String, nullable=False, unique=False)
@@ -115,8 +144,6 @@ class Notification(db.Model):
         self.name = name
         self.user_id = user_id
 
-# TODO: Settings: default shoppinglist sort, toggle notifications, allow nonfriend sharing, default mealplan schema, logout all
-
 class Meal(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String, nullable=False, unique=False)
@@ -125,6 +152,7 @@ class Meal(db.Model):
     difficulty = db.Column(db.Integer, nullable=False, unique=False)
     sleep_until = db.Column(db.String, nullable=True, unique=False)
     user_username = db.Column(db.String, nullable=False, unique=False)
+    #TODO: owner_username
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     recipe = db.relationship("Recipe", backref="meal", cascade='all, delete, delete-orphan')
     categories = db.relationship("Category", secondary="categories_table")
@@ -409,15 +437,23 @@ class NotificationSchema(ma.Schema):
 notification_schema = NotificationSchema()
 multiple_notification_schema = NotificationSchema(many=True)
 
+class SettingsSchema(ma.Schema):
+    class Meta:
+        fields = ("id", "default_mealplan_outline", "autodelete_mealplans", "autodelete_mealplans_schedule_number", "autodelete_mealplans_schedule_unit", "default_shoppinglist_sort", "autodelete_shoppinglists", "autodelete_shoppinglists_schedule_number", "autodelete_shoppinglists_schedule_unit", "allow_notifications", "allow_nonfriend_sharing", "user_id")
+
+settings_schema = SettingsSchema()
+multiple_settings_schema = SettingsSchema(many=True)
+
 class UserSchema(ma.Schema):
     class Meta:
-        fields = ("id", "username", "email", "meals", "categories", "mealplans", "mealplanoutlines", "shoppinglists", "notifications", "shared_meals", "shared_mealplans", "shared_shoppinglists", "outgoing_friend_requests", "incoming_friend_requests", "friends")
+        fields = ("id", "username", "email", "meals", "categories", "mealplans", "mealplanoutlines", "shoppinglists", "notifications", "settings", "shared_meals", "shared_mealplans", "shared_shoppinglists", "outgoing_friend_requests", "incoming_friend_requests", "friends")
     meals = ma.Nested(multiple_meal_schema)
     categories = ma.Nested(multiple_category_schema)
     mealplans = ma.Nested(multiple_mealplan_schema)
     mealplanoutlines = ma.Nested(multiple_mealplanoutline_schema)
     shoppinglists = ma.Nested(multiple_shoppinglist_schema)
     notifications = ma.Nested(multiple_notification_schema)
+    settings = base_fields.Function(lambda fields: settings_schema.dump(fields.settings[0]))
     shared_meals = ma.Nested(multiple_meal_schema)
     shared_mealplans = ma.Nested(multiple_mealplan_schema)
     shared_shoppinglists = ma.Nested(multiple_shoppinglist_schema)
@@ -456,6 +492,10 @@ def add_user():
 
     record = User(username, hashed_password, email)
     db.session.add(record)
+    db.session.commit()
+
+    settings = Settings(None, False, 1, "week", "arbitrary", False, "week", False, False)
+    db.session.add(settings)
     db.session.commit()
 
     token = ''.join(random.SystemRandom().choice(string.ascii_uppercase + string.ascii_lowercase + string.digits) for _ in range(16))
@@ -871,6 +911,68 @@ def delete_friend(id, friend_id):
             "user": user_schema.dump(user),
             "friend": user_schema.dump(friend)
         }
+    })
+
+
+@app.route("/settings/get", methods=["GET"])
+def get_all_settings():
+    records = db.session.query(Settings).all()
+    return jsonify(multiple_settings_schema.dump(records))
+
+@app.route("/settings/get/<id>", methods=["GET"])
+def get_settings_by_id(id):
+    record = db.session.query(Settings).filter(Settings.id == id).first()
+    return jsonify(settings_schema.dump(record))
+
+@app.route("/settings/update/<id>", methods=["PUT"])
+def update_settings(id):
+    if request.content_type != "application/json":
+        return jsonify({
+            "status": 400,
+            "message": "Error: Data must be sent as JSON.",
+            "data": {}
+        })
+
+    data = request.get_json()
+    default_mealplan_outline = data.get("default_mealplan_outline", -1)
+    autodelete_mealplans = data.get("autodelete_mealplans")
+    autodelete_mealplans_schedule_number = data.get("autodelete_mealplans_schedule_number")
+    autodelete_mealplans_schedule_unit = data.get("autodelete_mealplans_schedule_unit")
+    default_shoppinglist_sort = data.get("default_shoppinglist_sort")
+    autodelete_shoppinglists = data.get("autodelete_shoppinglists")
+    autodelete_shoppinglists_schedule_number = data.get("autodelete_shoppinglists_schedule_number")
+    autodelete_shoppinglists_schedule_unit = data.get("autodelete_shoppinglists_schedule_unit")
+    allow_notifications = data.get("allow_notifications")
+    allow_nonfriend_sharing = data.get("allow_nonfriend_sharing")
+
+    record = db.session.query(Settings).filter(Settings.id == id).first()
+    if default_mealplan_outline != -1:
+        record.default_mealplan_outline = default_mealplan_outline
+    if autodelete_mealplans is not None:
+        record.autodelete_mealplans = autodelete_mealplans
+    if autodelete_mealplans_schedule_number is not None:
+        record.autodelete_mealplans_schedule_number = autodelete_mealplans_schedule_number
+    if autodelete_mealplans_schedule_unit is not None:
+        record.autodelete_mealplans_schedule_unit = autodelete_mealplans_schedule_unit
+    if default_shoppinglist_sort is not None:
+        record.default_shoppinglist_sort = default_shoppinglist_sort
+    if autodelete_shoppinglists is not None:
+        record.autodelete_shoppinglists = autodelete_shoppinglists
+    if autodelete_shoppinglists_schedule_number is not None:
+        record.autodelete_shoppinglists_schedule_number = autodelete_shoppinglists_schedule_number
+    if autodelete_shoppinglists_schedule_unit is not None:
+        record.autodelete_shoppinglists_schedule_unit = autodelete_shoppinglists_schedule_unit
+    if allow_notifications is not None:
+        record.allow_notifications = allow_notifications
+    if allow_nonfriend_sharing is not None:
+        record.allow_nonfriend_sharing = allow_nonfriend_sharing
+
+    db.session.commit()
+
+    return jsonify({
+        "status": 200,
+        "message": "Settings Updated",
+        "data": settings_schema.dump(record)
     })
 
 
