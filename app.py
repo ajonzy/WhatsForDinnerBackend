@@ -494,7 +494,7 @@ def add_user():
     db.session.add(record)
     db.session.commit()
 
-    settings = Settings(None, False, 1, "week", "arbitrary", False, 1, "week", False, False, record.id)
+    settings = Settings(None, False, 1, "week", "arbitrary", False, 1, "week", True, False, record.id)
     db.session.add(settings)
     db.session.commit()
 
