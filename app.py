@@ -1087,7 +1087,9 @@ def share_meal():
     meal_id = data.get("meal_id")
     username = data.get("username")
 
+    shared_meal = db.session.query(Meal).filter(Meal.id == meal_id).first()
     shared_user = db.session.query(User).filter(User.username == username).first()
+    user = db.session.query(User).filter(User.id == shared_meal.user_id).first()
 
     if shared_user is None:
         return jsonify({
@@ -1096,14 +1098,12 @@ def share_meal():
             "data": {}
         })
 
-    if not shared_user.settings[0].allow_nonfriend_sharing:
+    if not shared_user.settings[0].allow_nonfriend_sharing and not user in shared_user.friends:
         return jsonify({
             "status": 400,
             "message": f"Sorry, {shared_user.username} is only accepting shares from friends.",
             "data": {}
         })
-
-    shared_meal = db.session.query(Meal).filter(Meal.id == meal_id).first()
 
     shared_user.shared_meals.append(shared_meal)
     db.session.commit()
@@ -2021,7 +2021,9 @@ def share_mealplan():
     mealplan_id = data.get("mealplan_id")
     username = data.get("username")
 
+    shared_mealplan = db.session.query(Mealplan).filter(Mealplan.id == mealplan_id).first()
     shared_user = db.session.query(User).filter(User.username == username).first()
+    user = db.session.query(User).filter(User.id == shared_mealplan.user_id).first()
 
     if shared_user is None:
         return jsonify({
@@ -2030,14 +2032,12 @@ def share_mealplan():
             "data": {}
         })
 
-    if not shared_user.settings[0].allow_nonfriend_sharing:
+    if not shared_user.settings[0].allow_nonfriend_sharing and not user in shared_user.friends:
         return jsonify({
             "status": 400,
             "message": f"Sorry, {shared_user.username} is only accepting shares from friends.",
             "data": {}
         })
-
-    shared_mealplan = db.session.query(Mealplan).filter(Mealplan.id == mealplan_id).first()
 
     shared_user.shared_mealplans.append(shared_mealplan)
     db.session.commit()
@@ -2455,7 +2455,9 @@ def share_shoppinglist():
     shoppinglist_id = data.get("shoppinglist_id")
     username = data.get("username")
 
+    shared_shoppinglist = db.session.query(Shoppinglist).filter(Shoppinglist.id == shoppinglist_id).first()
     shared_user = db.session.query(User).filter(User.username == username).first()
+    user = db.session.query(User).filter(User.id == shared_shoppinglist.user_id).first()
 
     if shared_user is None:
         return jsonify({
@@ -2464,14 +2466,12 @@ def share_shoppinglist():
             "data": {}
         })
 
-    if not shared_user.settings[0].allow_nonfriend_sharing:
+    if not shared_user.settings[0].allow_nonfriend_sharing and not user in shared_user.friends:
         return jsonify({
             "status": 400,
             "message": f"Sorry, {shared_user.username} is only accepting shares from friends.",
             "data": {}
         })
-
-    shared_shoppinglist = db.session.query(Shoppinglist).filter(Shoppinglist.id == shoppinglist_id).first()
 
     shared_user.shared_shoppinglists.append(shared_shoppinglist)
     db.session.commit()
