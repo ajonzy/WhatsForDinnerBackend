@@ -1096,7 +1096,7 @@ def share_meal():
             "data": {}
         })
 
-    if not shared_user.settings.allow_nonfriend_sharing:
+    if not shared_user.settings[0].allow_nonfriend_sharing:
         return jsonify({
             "status": 400,
             "message": f"Sorry, {shared_user.username} is only accepting shares from friends.",
@@ -2030,7 +2030,7 @@ def share_mealplan():
             "data": {}
         })
 
-    if not shared_user.settings.allow_nonfriend_sharing:
+    if not shared_user.settings[0].allow_nonfriend_sharing:
         return jsonify({
             "status": 400,
             "message": f"Sorry, {shared_user.username} is only accepting shares from friends.",
@@ -2464,7 +2464,7 @@ def share_shoppinglist():
             "data": {}
         })
 
-    if not shared_user.settings.allow_nonfriend_sharing:
+    if not shared_user.settings[0].allow_nonfriend_sharing:
         return jsonify({
             "status": 400,
             "message": f"Sorry, {shared_user.username} is only accepting shares from friends.",
