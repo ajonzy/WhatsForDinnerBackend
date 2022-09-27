@@ -494,7 +494,7 @@ def add_user():
     db.session.add(record)
     db.session.commit()
 
-    settings = Settings(None, False, 1, "week", "arbitrary", False, 1, "week", True, False, record.id)
+    settings = Settings(None, False, 1, "week", "arbitrary", False, 1, "week", True, True, record.id)
     db.session.add(settings)
     db.session.commit()
 
@@ -1093,6 +1093,13 @@ def share_meal():
         return jsonify({
             "status": 400,
             "message": "User doesn't exist.",
+            "data": {}
+        })
+
+    if not shared_user.setting.allow_nonfriend_sharing:
+        return jsonify({
+            "status": 400,
+            "message": f"Sorry, {shared_user.username} is only accepting shares from friends.",
             "data": {}
         })
 
@@ -2023,6 +2030,13 @@ def share_mealplan():
             "data": {}
         })
 
+    if not shared_user.setting.allow_nonfriend_sharing:
+        return jsonify({
+            "status": 400,
+            "message": f"Sorry, {shared_user.username} is only accepting shares from friends.",
+            "data": {}
+        })
+
     shared_mealplan = db.session.query(Mealplan).filter(Mealplan.id == mealplan_id).first()
 
     shared_user.shared_mealplans.append(shared_mealplan)
@@ -2447,6 +2461,13 @@ def share_shoppinglist():
         return jsonify({
             "status": 400,
             "message": "User doesn't exist.",
+            "data": {}
+        })
+
+    if not shared_user.setting.allow_nonfriend_sharing:
+        return jsonify({
+            "status": 400,
+            "message": f"Sorry, {shared_user.username} is only accepting shares from friends.",
             "data": {}
         })
 
