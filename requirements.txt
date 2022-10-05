@@ -1,0 +1,12 @@
+flask
+flask-sqlalchemy
+flask-marshmallow
+marshmallow-sqlalchemy
+flask-bcrypt
+flask-cors
+gunicorn
+psycopg2-binary
+python-dotenv
+werkzeug
+flask-socketio
+eventlet==0.30.2
