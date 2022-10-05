@@ -465,7 +465,15 @@ user_schema = UserSchema()
 multiple_user_schema = UserSchema(many=True)
 
 # Flask Endpoints
-# TODO Remove sensitive enpoints: get_user_by_id and delete_user(change to secure token)
+@app.before_request
+def before_request():
+    if request.authorization is None or request.authorization.username != os.environ.get("AUTH_USERNAME") or request.authorization.password != os.environ.get("AUTH_PASSWORD"):
+        return jsonify({
+            "status": 403,
+            "message": "Unauthorized",
+            "data": {}
+        })
+
 @app.route("/user/add", methods=["POST"])
 def add_user():
     if request.content_type != "application/json":
@@ -550,7 +558,7 @@ def login_user():
     while db.session.query(Session).filter(Session.token == token).first() != None:
         token = ''.join(random.SystemRandom().choice(string.ascii_uppercase + string.ascii_lowercase + string.digits) for _ in range(16))
 
-    hashed_ip = bcrypt.generate_password_hash(request.remote_addr).decode("utf-8")
+    hashed_ip = bcrypt.generate_password_hash(str(request.remote_addr)).decode("utf-8")
 
     session = Session(token, hashed_ip, record.id)
     db.session.add(session)
@@ -647,7 +655,7 @@ def get_user_by_token(token):
             "message": "User not authenticated.",
             "data": {}
         })
-    if bcrypt.check_password_hash(session.ip, request.remote_addr) is False:
+    if bcrypt.check_password_hash(session.ip, str(request.remote_addr)) is False:
         return jsonify({
             "status": 403,
             "message": "User not authenticated.",
